@@ -9,6 +9,7 @@ from ctypes import wintypes, Structure, c_void_p, c_char_p
 from ctypes import c_ulong, c_ushort, c_ubyte
 from pynput import mouse
 import keyboard
+from Xlib import X, display
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +25,9 @@ class TouchpadController:
     
     def cleanup(self):
         pass
+
+    def create_dummy_window(self):
+        raise NotImplementedError
 
 # ========================== Windows 实现 ==========================
 class GUID(Structure):
@@ -49,7 +53,8 @@ class WindowsTouchpadController(TouchpadController):
         self.device_handles = []
         self._init_api()
         self._find_touchpad_devices()
-
+        self.dummy_hwnd = None
+    
     def _init_api(self):
         self.setupapi = ctypes.WinDLL('SetupAPI')
         
@@ -156,6 +161,8 @@ class LinuxTouchpadController(TouchpadController):
         self.device_path = None
         self._init_libinput()
         self._find_touchpad()
+        self.dummy_window = None
+        self._init_xlib()
 
     def _init_libinput(self):
         self.libinput = ctypes.CDLL("libinput.so.10")
@@ -245,7 +252,9 @@ class EventHandler:
         logger.info(event.name)
         logger.info(event.event_type)
         try:
+            
             if event.name == 'space':
+                
                 if event.event_type == 'down':
                     with self.lock:
                         if self.space_is_pressed:
@@ -259,7 +268,6 @@ class EventHandler:
 
                 elif event.event_type == 'up':
                     with self.lock:
-                        self.space_is_pressed = False
                         if self.long_press_timer:
                             self.long_press_timer.cancel()
                             self.long_press_timer = None
@@ -273,7 +281,7 @@ class EventHandler:
                                     keyboard.remove_hotkey(self.left_click)
                             except KeyError:
                                 pass
-            
+
                             self.long_press_triggered = False
                             logger.info("触控板禁用，C/V解绑")
                     
