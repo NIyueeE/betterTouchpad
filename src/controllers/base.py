@@ -1,6 +1,5 @@
-# touchpad-control/core/base_controller.py
-import logging
 from pynput import mouse
+import logging
 
 logger = logging.getLogger(__name__)
 

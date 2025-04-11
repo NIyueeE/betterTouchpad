@@ -9,7 +9,6 @@ from ctypes import wintypes, Structure, c_void_p, c_char_p
 from ctypes import c_ulong, c_ushort, c_ubyte
 from pynput import mouse
 import keyboard
-from Xlib import X, display
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -162,7 +161,6 @@ class LinuxTouchpadController(TouchpadController):
         self._init_libinput()
         self._find_touchpad()
         self.dummy_window = None
-        self._init_xlib()
 
     def _init_libinput(self):
         self.libinput = ctypes.CDLL("libinput.so.10")
