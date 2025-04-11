@@ -1,1 +1,1 @@
-# -better_touchpad
+# betterTouchpad
