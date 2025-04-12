@@ -46,6 +46,7 @@ class EventHandler:
         try:
             if event.name == 'space':
                 if event.event_type == 'down':
+                    # logger.info(self.controller)
                     with self.lock:
                         if self.space_is_pressed:
                             return
@@ -55,6 +56,7 @@ class EventHandler:
                             self.long_press_timer.cancel()
                         self.long_press_timer = threading.Timer(0.5, self.handle_long_press)
                         self.long_press_timer.start()
+
 
                 elif event.event_type == 'up':
                     with self.lock:
@@ -73,8 +75,9 @@ class EventHandler:
                                 pass
 
                             self.long_press_triggered = False
+                             
                             logger.info("触控板禁用，C/V解绑")
-                    
+                        self.space_is_pressed = False
                         self.space_pressed_time = 0 
 
         except Exception as e:
