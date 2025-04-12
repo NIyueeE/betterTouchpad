@@ -8,6 +8,7 @@ from .controllers import create_controller
 from .logger_config import configure_logger
 
 logger = configure_logger()
+Response_time = 0.2
 
 class EventHandler:
     def __init__(self):
@@ -24,7 +25,7 @@ class EventHandler:
 
     def handle_long_press(self):
         with self.lock:
-            if time.time() - self.space_pressed_time >= 0.5 and self.space_is_pressed:
+            if time.time() - self.space_pressed_time >= Response_time and self.space_is_pressed:
                 self.long_press_triggered = True
                 self.controller.toggle(True)
 
@@ -38,6 +39,7 @@ class EventHandler:
 
                 self.left_click = keyboard.add_hotkey('space+c', self.controller.mouse.click, args=(mouse.Button.left,), suppress=True)
                 self.right_click = keyboard.add_hotkey('space+v', self.controller.mouse.click, args=(mouse.Button.right,), suppress=True)
+                
                 logger.info("触控板启用，C/V绑定为鼠标左右键")
 
     def on_key_event(self, event):
@@ -54,7 +56,7 @@ class EventHandler:
                         self.space_pressed_time = time.time()
                         if self.long_press_timer:
                             self.long_press_timer.cancel()
-                        self.long_press_timer = threading.Timer(0.5, self.handle_long_press)
+                        self.long_press_timer = threading.Timer(Response_time, self.handle_long_press)
                         self.long_press_timer.start()
 
 
