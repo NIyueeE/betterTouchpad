@@ -8,16 +8,19 @@ from .controllers import create_controller
 from .logger_config import configure_logger
 
 logger = configure_logger()
-Response_time = 0.2
+Response_time = 0.1
+Hot_key = 'space'
+Left_click = 'c'
+Right_click = 'v'
 
 class EventHandler:
     def __init__(self):
         self.controller = create_controller()
         self.should_exit = False
-        self.space_pressed_time = 0
+        self.hotkey_pressed_time = 0
         self.long_press_timer = None
         self.long_press_triggered = False
-        self.space_is_pressed = False
+        self.hotkey_is_pressed = False
         self.lock = threading.Lock()
 
         self.left_click = None
@@ -25,10 +28,12 @@ class EventHandler:
 
     def handle_long_press(self):
         with self.lock:
-            if time.time() - self.space_pressed_time >= Response_time and self.space_is_pressed:
+            if time.time() - self.hotkey_pressed_time >= Response_time and self.hotkey_is_pressed:
                 self.long_press_triggered = True
                 self.controller.toggle(True)
-
+                
+                keyboard.release(Hot_key)
+                
                 try:
                     if self.right_click:
                         keyboard.remove_hotkey(self.right_click)
@@ -36,38 +41,51 @@ class EventHandler:
                         keyboard.remove_hotkey(self.left_click)
                 except KeyError:
                     pass
-
-                self.left_click = keyboard.add_hotkey('space+c', self.controller.mouse.click, args=(mouse.Button.left,), suppress=True)
-                self.right_click = keyboard.add_hotkey('space+v', self.controller.mouse.click, args=(mouse.Button.right,), suppress=True)
                 
-                logger.info("触控板启用，C/V绑定为鼠标左右键")
+                self.left_click = keyboard.add_hotkey(
+                    Hot_key+'+'+Left_click,
+                    self.controller.mouse.click,
+                    args=(mouse.Button.left,),
+                    suppress=True
+                )
+                self.right_click = keyboard.add_hotkey(
+                    Hot_key+'+'+Right_click,
+                    self.controller.mouse.click,
+                    args=(mouse.Button.right,),
+                    suppress=True
+                )
+                logger.info("触控板启用，"+Left_click+","+Right_click+"解绑")
 
     def on_key_event(self, event):
-        logger.debug(event.name)
-        logger.debug(event.event_type)
+        logger.debug(f"Key event: {event.name} {event.event_type}")
         try:
-            if event.name == 'space':
+            if event.name == Hot_key:
                 if event.event_type == 'down':
-                    # logger.info(self.controller)
                     with self.lock:
-                        if self.space_is_pressed:
-                            return
-                        self.space_is_pressed = True
-                        self.space_pressed_time = time.time()
+                        if self.hotkey_is_pressed:
+                            return False  # 阻止重复事件
+                        self.hotkey_is_pressed = True
+                        self.hotkey_pressed_time = time.time()
                         if self.long_press_timer:
                             self.long_press_timer.cancel()
-                        self.long_press_timer = threading.Timer(Response_time, self.handle_long_press)
+                        self.long_press_timer = threading.Timer(
+                            Response_time,
+                            self.handle_long_press
+                        )
                         self.long_press_timer.start()
-
+                    
+                    # 长按触发后阻止所有空格按下事件
+                    if self.long_press_triggered:
+                        return False
 
                 elif event.event_type == 'up':
                     with self.lock:
+                        self.hotkey_is_pressed = False
                         if self.long_press_timer:
                             self.long_press_timer.cancel()
                             self.long_press_timer = None
                         if self.long_press_triggered:
                             self.controller.toggle(False)
-
                             try:
                                 if self.right_click:
                                     keyboard.remove_hotkey(self.right_click)
@@ -75,22 +93,25 @@ class EventHandler:
                                     keyboard.remove_hotkey(self.left_click)
                             except KeyError:
                                 pass
-
                             self.long_press_triggered = False
-                             
-                            logger.info("触控板禁用，C/V解绑")
-                        self.space_is_pressed = False
-                        self.space_pressed_time = 0 
+                            logger.info("触控板禁用，"+Left_click+","+Right_click+"解绑")
+                    
+                    return False if self.long_press_triggered else None
+
+            if event.name == Hot_key and event.event_type == 'down' and self.long_press_triggered:
+                return False
 
         except Exception as e:
-            logger.error("事件处理错误: %s", e)
+            logger.error(f"事件处理错误: {e}")
             self.should_exit = True
+        return None
 
     def run(self):
         try:
             keyboard.hook(self.on_key_event)
-            logger.info("服务已启动，长按空格0.5秒启用触控板，C/V作为鼠标左右键。释放空格后禁用。")
+            logger.info("betterTouchpad服务已启动")
 
+            # Linux系统需要事件循环
             if platform.system() == "Linux":
                 poller = select.poll()
                 poller.register(self.controller.fd, select.POLLIN)
