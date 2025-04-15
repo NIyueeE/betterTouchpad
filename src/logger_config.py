@@ -6,7 +6,7 @@ def configure_logger():
     设置日志级别和格式，返回配置好的logger实例
     """
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     return logging.getLogger(__name__)

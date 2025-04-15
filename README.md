@@ -16,7 +16,7 @@
 ```json
 {
     "response_time": 0.2,     // 长按响应时间（秒）
-    "hot_key": "`",           // 触发键
+    "hot_key": "f1",           // 触发键
     "left_click": "c",        // 左键点击对应按键
     "right_click": "v",       // 右键点击对应按键
     "mode": 0                 // 模式：0为长按模式, 1为切换模式

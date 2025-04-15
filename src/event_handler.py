@@ -4,10 +4,9 @@ import select
 import threading
 import json
 import os
-import sys
-import subprocess
 import queue
 import keyboard
+import keyboard.mouse
 import pyautogui
 from pynput import mouse
 import pystray
@@ -70,6 +69,7 @@ class EventHandler:
         self.left_click = None
         self.right_click = None
         self.press_hotkey = None
+        self.hotkey_down = None
         
         # 系统托盘图标
         self.tray_icon = None
@@ -94,6 +94,9 @@ class EventHandler:
     def handle_long_press(self):
         """处理长按事件 - 激活触控板模式"""
         with self.lock:
+            # 避免热键重复触发
+            self.hotkey_down = keyboard.on_press_key(HOT_KEY, lambda e: None, suppress=True)
+            
             if time.time() - self.hotkey_pressed_time >= RESPONSE_TIME and self.hotkey_is_pressed:
                 self.long_press_triggered = True
                 
@@ -138,10 +141,10 @@ class EventHandler:
                             args=(mouse.Button.right,),
                             suppress=True
                         )
-                    logger.info(f"触控板启用，{LEFT_CLICK},{RIGHT_CLICK}解绑")
+                    logger.info(f"触控板启用，{LEFT_CLICK},{RIGHT_CLICK}绑定")
                 else:
                     logger.info(f"触控板禁用，{LEFT_CLICK},{RIGHT_CLICK}解绑")
-                
+
     def on_key_event(self, event):
         """
         处理键盘事件
@@ -204,6 +207,7 @@ class EventHandler:
                                 logger.info(f"触控板禁用，{LEFT_CLICK},{RIGHT_CLICK}解绑")
                             # 切换模式下不需要在热键释放时关闭触控板
                             self.long_press_triggered = False
+                            keyboard.unhook(self.hotkey_down)
                         else:
                             # 短按：传递原始热键到系统
                             self.is_simulating = True
@@ -257,14 +261,26 @@ class EventHandler:
 
         except KeyboardInterrupt:
             logger.info("用户中断，退出...")
+        except Exception as e:
+            logger.error(f"运行时错误: {e}")
         finally:
             # 清理资源
-            self.controller.cleanup()
-            keyboard.unhook_all()
+            try:
+                self.controller.cleanup()
+            except Exception as e:
+                logger.error(f"清理控制器失败: {e}")
+                
+            try:
+                keyboard.unhook_all()
+            except Exception as e:
+                logger.error(f"卸载钩子失败: {e}")
             
             # 停止系统托盘图标
             if self.tray_icon:
-                self.tray_icon.stop()
+                try:
+                    self.tray_icon.stop()
+                except Exception as e:
+                    logger.error(f"停止系统托盘图标失败: {e}")
                 
             logger.info("服务已停止")
 
@@ -272,7 +288,18 @@ class EventHandler:
         """创建系统托盘图标"""
         # 创建一个简单的图标
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        icon_path = os.path.join(current_dir, 'icon.png')
+        icon_path = os.path.join(current_dir, './source/icon.png')
+        
+        # 确保图标目录存在
+        icon_dir = os.path.dirname(icon_path)
+        if not os.path.exists(icon_dir):
+            try:
+                os.makedirs(icon_dir, exist_ok=True)
+                logger.info(f"创建图标目录: {icon_dir}")
+            except Exception as e:
+                logger.error(f"创建图标目录失败: {e}")
+                # 如果无法创建目录，回退到当前目录
+                icon_path = os.path.join(current_dir, 'icon.png')
         
         # 检查图标是否存在，不存在则创建一个默认图标
         if not os.path.exists(icon_path):
@@ -287,8 +314,12 @@ class EventHandler:
             draw.ellipse([(28, 28), (36, 36)], fill=(255, 255, 255))
             
             # 保存图像
-            image.save(icon_path)
-            logger.info(f"创建默认图标: {icon_path}")
+            try:
+                image.save(icon_path)
+                logger.info(f"创建默认图标: {icon_path}")
+            except Exception as e:
+                logger.error(f"保存图标失败: {e}")
+                # 如果保存失败，尝试在内存中使用图像而不保存
         
         # 创建图标菜单
         menu = (
@@ -298,15 +329,27 @@ class EventHandler:
             pystray.MenuItem('退出', self._exit_app),
         )
         
-        # 创建系统托盘图标
-        icon = pystray.Icon(
-            'betterTouchpad',
-            Image.open(icon_path),
-            'Better Touchpad',
-            menu
-        )
-        
-        return icon
+        # 创建系统托盘图标，处理图标文件不存在的情况
+        try:
+            icon_image = Image.open(icon_path) if os.path.exists(icon_path) else image
+            icon = pystray.Icon(
+                'betterTouchpad',
+                icon_image,
+                'Better Touchpad',
+                menu
+            )
+            return icon
+        except Exception as e:
+            logger.error(f"创建系统托盘图标失败: {e}")
+            # 创建一个备用图标（纯色图标）
+            backup_image = Image.new('RGB', (64, 64), color=(0, 120, 212))
+            icon = pystray.Icon(
+                'betterTouchpad',
+                backup_image,
+                'Better Touchpad',
+                menu
+            )
+            return icon
     
     def _toggle_mode(self, icon, item):
         """切换模式"""
@@ -324,9 +367,14 @@ class EventHandler:
             logger.info("设置窗口已经打开，忽略请求")
             return
             
-        # 将打开设置窗口的命令放入队列，由主线程处理
-        self.command_queue.put(('open_settings', None))
-        self.settings_window_open = True
+        # 确保标志正确设置，即使在出现异常的情况下
+        try:
+            # 将打开设置窗口的命令放入队列，由主线程处理
+            self.command_queue.put(('open_settings', None))
+            self.settings_window_open = True
+        except Exception as e:
+            logger.error(f"打开设置窗口失败: {e}")
+            self.settings_window_open = False  # 重置标志确保用户可以再次尝试
     
     def _create_settings_window(self, parent=None):
         """创建设置窗口"""
@@ -420,9 +468,27 @@ class EventHandler:
             # 保存按钮
             def save_settings():
                 try:
-                    # 验证响应时间是数字
+                    # 验证配置值
                     try:
-                        float(response_time_var.get())
+                        # 验证响应时间是数字且合理
+                        response_time_val = float(response_time_var.get())
+                        if response_time_val <= 0 or response_time_val > 10:
+                            messagebox.showerror("错误", "响应时间必须是大于0且不超过10的数值")
+                            return
+                            
+                        # 验证热键不为空
+                        if not hot_key_var.get().strip():
+                            messagebox.showerror("错误", "触发键不能为空")
+                            return
+                            
+                        # 验证左右键点击不为空且不相同
+                        if not left_click_var.get().strip() or not right_click_var.get().strip():
+                            messagebox.showerror("错误", "左键和右键点击对应按键不能为空")
+                            return
+                            
+                        if left_click_var.get() == right_click_var.get():
+                            messagebox.showerror("错误", "左键和右键点击对应按键不能相同")
+                            return
                     except ValueError:
                         messagebox.showerror("错误", "响应时间必须是数字")
                         return
@@ -430,15 +496,20 @@ class EventHandler:
                     # 更新配置
                     new_config = {
                         "response_time": float(response_time_var.get()),
-                        "hot_key": hot_key_var.get(),
-                        "left_click": left_click_var.get(),
-                        "right_click": right_click_var.get(),
+                        "hot_key": hot_key_var.get().strip(),
+                        "left_click": left_click_var.get().strip(),
+                        "right_click": right_click_var.get().strip(),
                         "mode": mode_var.get()
                     }
                     
                     # 保存到文件
-                    with open(config_path, 'w', encoding='utf-8') as f:
-                        json.dump(new_config, f, indent=4, ensure_ascii=False)
+                    try:
+                        with open(config_path, 'w', encoding='utf-8') as f:
+                            json.dump(new_config, f, indent=4, ensure_ascii=False)
+                    except Exception as e:
+                        messagebox.showerror("错误", f"保存配置文件失败: {str(e)}")
+                        logger.error(f"保存配置文件失败: {e}")
+                        return
                     
                     # 重新加载配置并立即应用
                     if self.reload_config():
@@ -457,6 +528,8 @@ class EventHandler:
                 except Exception as e:
                     messagebox.showerror("错误", f"保存配置失败: {str(e)}")
                     logger.error(f"保存配置失败: {e}")
+                    # 确保发生错误时也能正确重置窗口状态
+                    self.settings_window_open = False
             
             # 取消按钮
             def cancel_settings():
@@ -505,9 +578,35 @@ class EventHandler:
     def _exit_app(self, icon, item):
         """退出应用"""
         logger.info("用户从系统托盘退出应用")
-        icon.stop()
+        # 停止图标
+        try:
+            icon.stop()
+        except Exception as e:
+            logger.error(f"停止系统托盘图标失败: {e}")
+            
+        # 置退出标志
         self.should_exit = True
-    
+        
+        # 清理资源
+        try:
+            self._cleanup_hotkeys()
+            if self.press_hotkey:
+                keyboard.remove_hotkey(self.press_hotkey)
+        except Exception as e:
+            logger.error(f"清理热键失败: {e}")
+            
+        # 关闭触控板控制器
+        try:
+            self.controller.cleanup()
+        except Exception as e:
+            logger.error(f"清理控制器失败: {e}")
+            
+        # 移除所有钩子确保彻底清理
+        try:
+            keyboard.unhook_all()
+        except Exception as e:
+            logger.error(f"卸载钩子失败: {e}")
+
     def _update_config(self, key, value):
         """更新配置"""
         try:
@@ -540,75 +639,91 @@ class EventHandler:
             current_dir = os.path.dirname(os.path.abspath(__file__))
             config_path = os.path.join(current_dir, 'configure.json')
             
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+            # 使用锁确保线程安全
+            with self.lock:
+                # 备份当前热键配置，以便清理
+                old_hot_key = HOT_KEY
+                old_left_click = LEFT_CLICK
+                old_right_click = RIGHT_CLICK
+                old_mode = MODE
                 
-            # 读取新的配置参数
-            old_hot_key = HOT_KEY
-            old_left_click = LEFT_CLICK
-            old_right_click = RIGHT_CLICK
-            old_mode = MODE
-            
-            # 更新全局配置
-            RESPONSE_TIME = config["response_time"]  
-            HOT_KEY = config["hot_key"]              
-            LEFT_CLICK = config["left_click"]        
-            RIGHT_CLICK = config["right_click"]      
-            MODE = config["mode"]                    
-            
-            logger.info(f"重新加载配置: 响应时间={RESPONSE_TIME}, 热键={HOT_KEY}, 左键={LEFT_CLICK}, 右键={RIGHT_CLICK}, 模式={MODE}")
-            
-            # 清理现有热键绑定
-            self._cleanup_hotkeys()
-            try:
-                if self.press_hotkey:
-                    keyboard.remove_hotkey(self.press_hotkey)
-            except KeyError:
-                pass
-            
-            # 如果触控板处于激活状态且热键相关配置有变化
-            if self.touchpad_active:
-                # 根据当前模式设置热键绑定
-                if MODE == 1:  # 切换模式
-                    self.left_click = keyboard.add_hotkey(
-                        LEFT_CLICK,
-                        self.controller.mouse.click,
-                        args=(mouse.Button.left,),
-                        suppress=True
-                    )
-                    self.right_click = keyboard.add_hotkey(
-                        RIGHT_CLICK,
-                        self.controller.mouse.click,
-                        args=(mouse.Button.right,),
-                        suppress=True
-                    )
-                else:  # 长按模式
-                    self.left_click = keyboard.add_hotkey(
-                        f"{HOT_KEY}+{LEFT_CLICK}",
-                        self.controller.mouse.click,
-                        args=(mouse.Button.left,),
-                        suppress=True
-                    )
-                    self.right_click = keyboard.add_hotkey(
-                        f"{HOT_KEY}+{RIGHT_CLICK}",
-                        self.controller.mouse.click,
-                        args=(mouse.Button.right,),
-                        suppress=True
-                    )
-                logger.info(f"触控板热键已更新: {LEFT_CLICK}, {RIGHT_CLICK}")
-            
-            # 重新注册主热键
-            self.press_hotkey = keyboard.add_hotkey(HOT_KEY, lambda: None, suppress=True)
-            
-            # 如果模式从长按切换到切换模式或反之，可能需要调整触控板状态
-            if old_mode != MODE and self.touchpad_active:
-                if MODE == 0:  # 切换到长按模式
-                    # 长按模式下需保持按住热键才能使用触控板，所以这里关闭触控板
-                    self.controller.toggle(False)
-                    self.touchpad_active = False
-                    logger.info("模式切换为长按模式，触控板已禁用")
-            
-            return True
+                # 读取配置文件
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                # 更新全局配置
+                RESPONSE_TIME = config.get("response_time", 0.2)  
+                HOT_KEY = config.get("hot_key", "`")              
+                LEFT_CLICK = config.get("left_click", "c")        
+                RIGHT_CLICK = config.get("right_click", "v")      
+                MODE = config.get("mode", 0)                    
+                
+                logger.info(f"重新加载配置: 响应时间={RESPONSE_TIME}, 热键={HOT_KEY}, 左键={LEFT_CLICK}, 右键={RIGHT_CLICK}, 模式={MODE}")
+                
+                # 清理现有热键绑定，确保旧按键被清理
+                self._cleanup_hotkeys()
+                try:
+                    if self.press_hotkey:
+                        keyboard.remove_hotkey(self.press_hotkey)
+                        self.press_hotkey = None
+                    
+                    # 清理可能的组合热键
+                    if old_hot_key and old_left_click:
+                        try:
+                            keyboard.remove_hotkey(f"{old_hot_key}+{old_left_click}")
+                        except:
+                            pass
+                    if old_hot_key and old_right_click:
+                        try:
+                            keyboard.remove_hotkey(f"{old_hot_key}+{old_right_click}")
+                        except:
+                            pass
+                except Exception as e:
+                    logger.error(f"清理热键失败: {e}")
+                
+                # 如果触控板处于激活状态，重新设置热键绑定
+                if self.touchpad_active:
+                    # 根据当前模式设置热键绑定
+                    if MODE == 1:  # 切换模式
+                        self.left_click = keyboard.add_hotkey(
+                            LEFT_CLICK,
+                            self.controller.mouse.click,
+                            args=(mouse.Button.left,),
+                            suppress=True
+                        )
+                        self.right_click = keyboard.add_hotkey(
+                            RIGHT_CLICK,
+                            self.controller.mouse.click,
+                            args=(mouse.Button.right,),
+                            suppress=True
+                        )
+                    else:  # 长按模式
+                        self.left_click = keyboard.add_hotkey(
+                            f"{HOT_KEY}+{LEFT_CLICK}",
+                            self.controller.mouse.click,
+                            args=(mouse.Button.left,),
+                            suppress=True
+                        )
+                        self.right_click = keyboard.add_hotkey(
+                            f"{HOT_KEY}+{RIGHT_CLICK}",
+                            self.controller.mouse.click,
+                            args=(mouse.Button.right,),
+                            suppress=True
+                        )
+                    logger.info(f"触控板热键已更新: {LEFT_CLICK}, {RIGHT_CLICK}")
+                
+                # 重新注册主热键
+                self.press_hotkey = keyboard.add_hotkey(HOT_KEY, lambda: None, suppress=True)
+                
+                # 如果模式从长按切换到切换模式或反之，可能需要调整触控板状态
+                if old_mode != MODE and self.touchpad_active:
+                    if MODE == 0:  # 切换到长按模式
+                        # 长按模式下需保持按住热键才能使用触控板，所以这里关闭触控板
+                        self.controller.toggle(False)
+                        self.touchpad_active = False
+                        logger.info("模式切换为长按模式，触控板已禁用")
+                
+                return True
             
         except Exception as e:
             logger.error(f"重新加载配置文件失败: {e}")
