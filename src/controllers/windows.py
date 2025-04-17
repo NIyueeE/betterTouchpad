@@ -88,3 +88,13 @@ class WindowsTouchpadController(TouchpadController):
         本实现无需特殊操作
         """
         pass
+
+def create_controller():
+    if system == "Windows":
+        return WindowsTouchpadController()
+    elif system == "Linux":
+        return LinuxTouchpadController()
+    else:
+        raise NotImplementedError(f"不支持的平台: {system}")
+
+__all__ = ['TouchpadController', 'create_controller']

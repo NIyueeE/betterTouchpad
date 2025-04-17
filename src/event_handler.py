@@ -6,7 +6,6 @@ import json
 import os
 import queue
 import keyboard
-import keyboard.mouse
 import pyautogui
 from pynput import mouse
 import pystray
@@ -246,18 +245,9 @@ class EventHandler:
             logger.info("系统托盘图标已启动")
             
             # 主循环
-            if platform.system() == "Linux":
-                # Linux系统需要事件循环
-                poller = select.poll()
-                poller.register(self.controller.fd, select.POLLIN)
-                while not self.should_exit:
-                    poller.poll(100)
-                    self._process_command_queue()
-            else:
-                # Windows/Mac系统
-                while not self.should_exit:
-                    time.sleep(0.1)
-                    self._process_command_queue()
+            while not self.should_exit:
+                time.sleep(0.1)
+                self._process_command_queue()
 
         except KeyboardInterrupt:
             logger.info("用户中断，退出...")

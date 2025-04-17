@@ -1,8 +1,6 @@
 import platform
 
 from .base import TouchpadController
-from .windows import WindowsTouchpadController
-from .linux import LinuxTouchpadController
 
 def create_controller():
     """
@@ -11,8 +9,10 @@ def create_controller():
     """
     system = platform.system()
     if system == "Windows":
+        from .windows import WindowsTouchpadController
         return WindowsTouchpadController()
     elif system == "Linux":
+        from .linux import LinuxTouchpadController
         return LinuxTouchpadController()
     else:
         raise NotImplementedError(f"不支持的平台: {system}")
