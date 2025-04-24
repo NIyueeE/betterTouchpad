@@ -39,9 +39,9 @@ except Exception as e:
     logger.error(f"读取配置文件失败: {e}，使用默认配置")
     # 默认配置参数
     RESPONSE_TIME = 0.2  # 长按响应时间（秒）
-    HOT_KEY = '`'        # 触发键
-    LEFT_CLICK = 'c'     # 左键点击对应按键
-    RIGHT_CLICK = 'v'    # 右键点击对应按键
+    HOT_KEY = 'f1'        # 触发键
+    LEFT_CLICK = 'f2'     # 左键点击对应按键
+    RIGHT_CLICK = 'f3'    # 右键点击对应按键
     MODE = 0             # 0为长按模式, 1为切换模式
 
 class EventHandler:
@@ -65,8 +65,10 @@ class EventHandler:
         self.long_press_timer = None
         
         # 热键绑定
-        self.left_click = None
-        self.right_click = None
+        self.left_click_press = None
+        self.right_click_press = None
+        self.left_click_release = None
+        self.right_click_release = None
         self.press_hotkey = None
         self.hotkey_down = None
         
@@ -83,10 +85,15 @@ class EventHandler:
     def _cleanup_hotkeys(self):
         """清理热键绑定"""
         try:
-            if self.right_click:
-                keyboard.remove_hotkey(self.right_click)
-            if self.left_click:
-                keyboard.remove_hotkey(self.left_click)
+            if self.right_click_press:
+                keyboard.unhook(self.right_click_press)
+            if self.left_click_press:
+                keyboard.unhook(self.left_click_press)
+            if self.right_click_release:
+                keyboard.unhook(self.right_click_release)
+            if self.left_click_release:
+                keyboard.unhook(self.left_click_release)
+            
         except KeyError:
             pass
 
@@ -114,32 +121,12 @@ class EventHandler:
                 
                 if self.touchpad_active:
                     # 设置鼠标点击热键
-                    if MODE == 1:
-                        self.left_click = keyboard.add_hotkey(
-                            LEFT_CLICK,
-                            self.controller.mouse.click,
-                            args=(mouse.Button.left,),
-                            suppress=True
-                        )
-                        self.right_click = keyboard.add_hotkey(
-                            RIGHT_CLICK,
-                            self.controller.mouse.click,
-                            args=(mouse.Button.right,),
-                            suppress=True
-                        )
-                    elif MODE == 0:
-                        self.left_click = keyboard.add_hotkey(
-                            f"{HOT_KEY}+{LEFT_CLICK}",
-                            self.controller.mouse.click,
-                            args=(mouse.Button.left,),
-                            suppress=True
-                        )
-                        self.right_click = keyboard.add_hotkey(
-                            f"{HOT_KEY}+{RIGHT_CLICK}",
-                            self.controller.mouse.click,
-                            args=(mouse.Button.right,),
-                            suppress=True
-                        )
+                    
+                    self.left_click_press = keyboard.on_press_key(LEFT_CLICK, lambda e: self.controller.mouse.press(mouse.Button.left), suppress=True)
+                    self.right_click_press = keyboard.on_press_key(RIGHT_CLICK, lambda e: self.controller.mouse.press(mouse.Button.right), suppress=True)
+                    self.left_click_release = keyboard.on_release_key(LEFT_CLICK, lambda e: self.controller.mouse.release(mouse.Button.left), suppress=True)
+                    self.right_click_release = keyboard.on_release_key(RIGHT_CLICK, lambda e: self.controller.mouse.release(mouse.Button.right), suppress=True)
+
                     logger.info(f"触控板启用，{LEFT_CLICK},{RIGHT_CLICK}绑定")
                 else:
                     logger.info(f"触控板禁用，{LEFT_CLICK},{RIGHT_CLICK}解绑")
@@ -397,16 +384,16 @@ class EventHandler:
                     config = json.load(f)
                     
                 response_time = config.get("response_time", 0.2)
-                hot_key = config.get("hot_key", "`")
-                left_click = config.get("left_click", "c")
-                right_click = config.get("right_click", "v")
+                hot_key = config.get("hot_key", "f1")
+                left_click = config.get("left_click", "f2")
+                right_click = config.get("right_click", "f3")
                 mode = config.get("mode", 0)
             except Exception as e:
                 logger.error(f"读取配置失败: {e}")
                 response_time = 0.2
-                hot_key = "`"
-                left_click = "c"
-                right_click = "v"
+                hot_key = "f1"
+                left_click = "f2"
+                right_click = "f3"
                 mode = 0
             
             # 创建设置界面 - 增加内边距
@@ -428,20 +415,26 @@ class EventHandler:
             response_time_var = tk.StringVar(value=str(response_time))
             ttk.Entry(settings_frame, textvariable=response_time_var, width=15).grid(row=0, column=1, sticky=tk.W, pady=row_pady, padx=10)
             
+            # 创建功能键选项
+            function_keys = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"]
+            
             # 热键
             ttk.Label(settings_frame, text="触发键:", font=("Arial", 10)).grid(row=1, column=0, sticky=tk.W, pady=row_pady)
-            hot_key_var = tk.StringVar(value=hot_key)
-            ttk.Entry(settings_frame, textvariable=hot_key_var, width=15).grid(row=1, column=1, sticky=tk.W, pady=row_pady, padx=10)
+            hot_key_var = tk.StringVar(value=hot_key if hot_key in function_keys else "f1")
+            hot_key_combo = ttk.Combobox(settings_frame, textvariable=hot_key_var, values=function_keys, width=12, state="readonly")
+            hot_key_combo.grid(row=1, column=1, sticky=tk.W, pady=row_pady, padx=10)
             
             # 左键点击
             ttk.Label(settings_frame, text="左键点击对应按键:", font=("Arial", 10)).grid(row=2, column=0, sticky=tk.W, pady=row_pady)
-            left_click_var = tk.StringVar(value=left_click)
-            ttk.Entry(settings_frame, textvariable=left_click_var, width=15).grid(row=2, column=1, sticky=tk.W, pady=row_pady, padx=10)
+            left_click_var = tk.StringVar(value=left_click if left_click in function_keys else "f2")
+            left_click_combo = ttk.Combobox(settings_frame, textvariable=left_click_var, values=function_keys, width=12, state="readonly")
+            left_click_combo.grid(row=2, column=1, sticky=tk.W, pady=row_pady, padx=10)
             
             # 右键点击
             ttk.Label(settings_frame, text="右键点击对应按键:", font=("Arial", 10)).grid(row=3, column=0, sticky=tk.W, pady=row_pady)
-            right_click_var = tk.StringVar(value=right_click)
-            ttk.Entry(settings_frame, textvariable=right_click_var, width=15).grid(row=3, column=1, sticky=tk.W, pady=row_pady, padx=10)
+            right_click_var = tk.StringVar(value=right_click if right_click in function_keys else "f3")
+            right_click_combo = ttk.Combobox(settings_frame, textvariable=right_click_var, values=function_keys, width=12, state="readonly")
+            right_click_combo.grid(row=3, column=1, sticky=tk.W, pady=row_pady, padx=10)
             
             # 模式选择 - 使用单独的框架并添加标题
             mode_frame = ttk.LabelFrame(main_frame, text="操作模式", padding=(15, 5))
@@ -466,18 +459,9 @@ class EventHandler:
                             messagebox.showerror("错误", "响应时间必须是大于0且不超过10的数值")
                             return
                             
-                        # 验证热键不为空
-                        if not hot_key_var.get().strip():
-                            messagebox.showerror("错误", "触发键不能为空")
-                            return
-                            
-                        # 验证左右键点击不为空且不相同
-                        if not left_click_var.get().strip() or not right_click_var.get().strip():
-                            messagebox.showerror("错误", "左键和右键点击对应按键不能为空")
-                            return
-                            
-                        if left_click_var.get() == right_click_var.get():
-                            messagebox.showerror("错误", "左键和右键点击对应按键不能相同")
+                        # 验证按键选择 - 不能相同
+                        if left_click_var.get() == right_click_var.get() or left_click_var.get() == hot_key_var.get() or right_click_var.get() == hot_key_var.get():
+                            messagebox.showerror("错误", "触发键、左键点击和右键点击对应按键不能相同")
                             return
                     except ValueError:
                         messagebox.showerror("错误", "响应时间必须是数字")
@@ -486,9 +470,9 @@ class EventHandler:
                     # 更新配置
                     new_config = {
                         "response_time": float(response_time_var.get()),
-                        "hot_key": hot_key_var.get().strip(),
-                        "left_click": left_click_var.get().strip(),
-                        "right_click": right_click_var.get().strip(),
+                        "hot_key": hot_key_var.get(),
+                        "left_click": left_click_var.get(),
+                        "right_click": right_click_var.get(),
                         "mode": mode_var.get()
                     }
                     
@@ -503,7 +487,6 @@ class EventHandler:
                     
                     # 重新加载配置并立即应用
                     if self.reload_config():
-                        # messagebox.showinfo("成功", "设置已保存并立即生效")
                         logger.info("设置已保存并立即生效")
                     else:
                         messagebox.showwarning("警告", "设置已保存，但应用更改失败，可能需要重启应用")
@@ -643,9 +626,9 @@ class EventHandler:
                 
                 # 更新全局配置
                 RESPONSE_TIME = config.get("response_time", 0.2)  
-                HOT_KEY = config.get("hot_key", "`")              
-                LEFT_CLICK = config.get("left_click", "c")        
-                RIGHT_CLICK = config.get("right_click", "v")      
+                HOT_KEY = config.get("hot_key", "f1")              
+                LEFT_CLICK = config.get("left_click", "f2")        
+                RIGHT_CLICK = config.get("right_click", "f3")      
                 MODE = config.get("mode", 0)                    
                 
                 logger.info(f"重新加载配置: 响应时间={RESPONSE_TIME}, 热键={HOT_KEY}, 左键={LEFT_CLICK}, 右键={RIGHT_CLICK}, 模式={MODE}")
@@ -674,32 +657,12 @@ class EventHandler:
                 # 如果触控板处于激活状态，重新设置热键绑定
                 if self.touchpad_active:
                     # 根据当前模式设置热键绑定
-                    if MODE == 1:  # 切换模式
-                        self.left_click = keyboard.add_hotkey(
-                            LEFT_CLICK,
-                            self.controller.mouse.click,
-                            args=(mouse.Button.left,),
-                            suppress=True
-                        )
-                        self.right_click = keyboard.add_hotkey(
-                            RIGHT_CLICK,
-                            self.controller.mouse.click,
-                            args=(mouse.Button.right,),
-                            suppress=True
-                        )
-                    else:  # 长按模式
-                        self.left_click = keyboard.add_hotkey(
-                            f"{HOT_KEY}+{LEFT_CLICK}",
-                            self.controller.mouse.click,
-                            args=(mouse.Button.left,),
-                            suppress=True
-                        )
-                        self.right_click = keyboard.add_hotkey(
-                            f"{HOT_KEY}+{RIGHT_CLICK}",
-                            self.controller.mouse.click,
-                            args=(mouse.Button.right,),
-                            suppress=True
-                        )
+                    
+                    self.left_click_press = keyboard.on_press_key(LEFT_CLICK, lambda e: self.controller.mouse.press(mouse.Button.left), suppress=True)
+                    self.right_click_press = keyboard.on_press_key(RIGHT_CLICK, lambda e: self.controller.mouse.press(mouse.Button.right), suppress=True)
+                    self.left_click_release = keyboard.on_release_key(LEFT_CLICK, lambda e: self.controller.mouse.release(mouse.Button.left), suppress=True)
+                    self.right_click_release = keyboard.on_release_key(RIGHT_CLICK, lambda e: self.controller.mouse.release(mouse.Button.right), suppress=True)
+
                     logger.info(f"触控板热键已更新: {LEFT_CLICK}, {RIGHT_CLICK}")
                 
                 # 重新注册主热键
