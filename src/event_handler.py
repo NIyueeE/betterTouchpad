@@ -151,6 +151,9 @@ class EventHandler:
                     self.touchpad_active = True
                     self.controller.toggle(True)  # 启用触控板
                 
+                # 更新系统托盘图标
+                self._update_tray_icon()
+                
                 keyboard.release(HOT_KEY)  # 释放热键，防止粘滞
                 
                 # 根据触控板状态设置按键绑定
@@ -232,6 +235,8 @@ class EventHandler:
                                 except Exception as e:
                                     logger.error(f"解绑按键失败: {e}或者按键未绑定")
                                 self.touchpad_active = False
+                                # 更新系统托盘图标
+                                self._update_tray_icon()
                                 logger.info(f"触控板禁用，{LEFT_CLICK},{RIGHT_CLICK}解绑")
                                 
                             # 无论哪种模式，都需要清理状态
@@ -313,6 +318,8 @@ class EventHandler:
     def _start_tray_icon(self):
         """在独立线程中启动系统托盘图标"""
         self.tray_icon = self._create_tray_icon()
+        # 初始化时更新图标状态
+        self._update_tray_icon()
         self.tray_icon.run()
 
     def _create_tray_icon(self):
@@ -324,7 +331,7 @@ class EventHandler:
         """
         # 创建图标路径
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        icon_path = os.path.join(current_dir, './source/icon.png')
+        icon_path = os.path.join(current_dir, './source/default.png')
         
         # 确保图标目录存在
         icon_dir = os.path.dirname(icon_path)
@@ -335,7 +342,7 @@ class EventHandler:
             except Exception as e:
                 logger.error(f"创建图标目录失败: {e}")
                 # 如果无法创建目录，回退到当前目录
-                icon_path = os.path.join(current_dir, 'icon.png')
+                icon_path = os.path.join(current_dir, 'default.png')
         
         # 检查图标是否存在，不存在则创建一个默认图标
         image = None
@@ -358,6 +365,7 @@ class EventHandler:
         
         # 创建系统托盘图标，处理图标文件不存在的情况
         try:
+            # 使用默认图标初始化
             icon_image = Image.open(icon_path) if os.path.exists(icon_path) else image or self._create_default_icon()
             icon = pystray.Icon(
                 'betterTouchpad',
@@ -377,6 +385,36 @@ class EventHandler:
                 menu
             )
             return icon
+    
+    def _update_tray_icon(self):
+        """
+        根据触控板状态更新系统托盘图标
+        """
+        if not self.tray_icon:
+            return
+            
+        try:
+            # 获取图标路径
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            # 根据触控板状态选择图标
+            if self.touchpad_active:
+                icon_path = os.path.join(current_dir, './source/on.png')
+            else:
+                icon_path = os.path.join(current_dir, './source/off.png')
+            
+            # 检查图标是否存在
+            if not os.path.exists(icon_path):
+                logger.warning(f"图标文件不存在: {icon_path}，使用默认图标")
+                return
+                
+            # 加载图标并更新
+            icon_image = Image.open(icon_path)
+            self.tray_icon.icon = icon_image
+            logger.info(f"已更新系统托盘图标为: {os.path.basename(icon_path)}")
+            
+        except Exception as e:
+            logger.error(f"更新系统托盘图标失败: {e}")
     
     def _create_default_icon(self):
         """创建默认图标"""
@@ -398,6 +436,12 @@ class EventHandler:
         MODE = 1 if MODE == 0 else 0
         # 更新配置文件
         self._update_config("mode", MODE)
+        # 如果切换到长按模式，且触控板处于激活状态，则关闭触控板
+        if MODE == 0 and self.touchpad_active:
+            self.touchpad_active = False
+            self.controller.toggle(False)
+            # 更新图标状态
+            self._update_tray_icon()
         logger.info(f"模式已切换为: {'切换模式' if MODE == 1 else '长按模式'}")
     
     def _open_settings(self, icon, item):
@@ -433,6 +477,16 @@ class EventHandler:
             settings_window.geometry("450x420")
             settings_window.resizable(False, False)
             
+            # 设置窗口图标
+            try:
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                icon_img = os.path.join(current_dir, './source/default.ico')
+                if os.path.exists(icon_img):
+                    settings_window.iconbitmap(icon_img)
+                    logger.info(f"已设置窗口图标: {icon_img}")
+            except Exception as e:
+                logger.error(f"设置窗口图标失败: {e}")
+            
             # 设置窗口关闭事件处理
             def on_window_close():
                 self.settings_window_open = False
@@ -450,7 +504,7 @@ class EventHandler:
             main_frame.pack(fill=tk.BOTH, expand=True)
             
             # 添加标题
-            ttk.Label(main_frame, text="Better Touchpad 设置", font=("Arial", 14, "bold")).pack(pady=(0, 25))
+            ttk.Label(main_frame, text="Better Touchpad", font=("Arial", 14, "bold")).pack(pady=(0, 25))
             
             # 创建设置选项
             self._create_settings_controls(main_frame, config_data)
@@ -790,6 +844,8 @@ class EventHandler:
                         # 长按模式下需保持按住热键才能使用触控板，所以这里关闭触控板
                         self.controller.toggle(False)
                         self.touchpad_active = False
+                        # 更新系统托盘图标
+                        self._update_tray_icon()
                         logger.info("模式切换为长按模式，触控板已禁用")
                 
                 return True
