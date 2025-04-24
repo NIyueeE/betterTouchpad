@@ -1,6 +1,4 @@
-import platform
 import time
-import select
 import threading
 import json
 import os
@@ -64,11 +62,7 @@ class EventHandler:
         # 定时器
         self.long_press_timer = None
         
-        # 热键绑定
-        self.left_click_press = None
-        self.right_click_press = None
-        self.left_click_release = None
-        self.right_click_release = None
+        # 热键绑定句柄
         self.press_hotkey = None
         self.hotkey_down = None
         
@@ -81,21 +75,19 @@ class EventHandler:
         
         # 正在显示设置窗口的标志
         self.settings_window_open = False
-
-    def _cleanup_hotkeys(self):
-        """清理热键绑定"""
-        try:
-            if self.right_click_press:
-                keyboard.unhook(self.right_click_press)
-            if self.left_click_press:
-                keyboard.unhook(self.left_click_press)
-            if self.right_click_release:
-                keyboard.unhook(self.right_click_release)
-            if self.left_click_release:
-                keyboard.unhook(self.left_click_release)
-            
-        except KeyError:
-            pass
+    
+    def on_left_click(self, event):
+        if event.name == LEFT_CLICK:
+            if event.event_type == 'down':
+                self.controller.mouse.press(mouse.Button.left)
+            elif event.event_type == 'up':
+                self.controller.mouse.release(mouse.Button.left)
+    def on_right_click(self, event):
+        if event.name == RIGHT_CLICK:
+            if event.event_type == 'down':
+                self.controller.mouse.press(mouse.Button.right)
+            elif event.event_type == 'up':
+                self.controller.mouse.release(mouse.Button.right)
 
     def handle_long_press(self):
         """处理长按事件 - 激活触控板模式"""
@@ -116,16 +108,10 @@ class EventHandler:
                 
                 keyboard.release(HOT_KEY)  # 释放热键，防止粘滞
                 
-                # 清理现有热键并重新设置
-                self._cleanup_hotkeys()
-                
                 if self.touchpad_active:
                     # 设置鼠标点击热键
-                    
-                    self.left_click_press = keyboard.on_press_key(LEFT_CLICK, lambda e: self.controller.mouse.press(mouse.Button.left), suppress=True)
-                    self.right_click_press = keyboard.on_press_key(RIGHT_CLICK, lambda e: self.controller.mouse.press(mouse.Button.right), suppress=True)
-                    self.left_click_release = keyboard.on_release_key(LEFT_CLICK, lambda e: self.controller.mouse.release(mouse.Button.left), suppress=True)
-                    self.right_click_release = keyboard.on_release_key(RIGHT_CLICK, lambda e: self.controller.mouse.release(mouse.Button.right), suppress=True)
+                    keyboard.hook_key(LEFT_CLICK, self.on_left_click, suppress=True)
+                    keyboard.hook_key(RIGHT_CLICK, self.on_right_click, suppress=True)
 
                     logger.info(f"触控板启用，{LEFT_CLICK},{RIGHT_CLICK}绑定")
                 else:
@@ -188,7 +174,10 @@ class EventHandler:
                             # 根据模式决定热键释放后的行为
                             if MODE == 0:  # 长按模式：释放热键后关闭触控板
                                 self.controller.toggle(False)
-                                self._cleanup_hotkeys()
+
+                                keyboard.unhook(self.on_left_click)
+                                keyboard.unhook(self.on_right_click)
+
                                 self.touchpad_active = False
                                 logger.info(f"触控板禁用，{LEFT_CLICK},{RIGHT_CLICK}解绑")
                             # 切换模式下不需要在热键释放时关闭触控板
@@ -562,7 +551,9 @@ class EventHandler:
         
         # 清理资源
         try:
-            self._cleanup_hotkeys()
+            keyboard.unhook(self.on_left_click)
+            keyboard.unhook(self.on_right_click)
+
             if self.press_hotkey:
                 keyboard.remove_hotkey(self.press_hotkey)
         except Exception as e:
@@ -615,9 +606,6 @@ class EventHandler:
             # 使用锁确保线程安全
             with self.lock:
                 # 备份当前热键配置，以便清理
-                old_hot_key = HOT_KEY
-                old_left_click = LEFT_CLICK
-                old_right_click = RIGHT_CLICK
                 old_mode = MODE
                 
                 # 读取配置文件
@@ -633,24 +621,13 @@ class EventHandler:
                 
                 logger.info(f"重新加载配置: 响应时间={RESPONSE_TIME}, 热键={HOT_KEY}, 左键={LEFT_CLICK}, 右键={RIGHT_CLICK}, 模式={MODE}")
                 
-                # 清理现有热键绑定，确保旧按键被清理
-                self._cleanup_hotkeys()
+                keyboard.unhook(self.on_left_click)
+                keyboard.unhook(self.on_right_click)
+
                 try:
                     if self.press_hotkey:
                         keyboard.remove_hotkey(self.press_hotkey)
                         self.press_hotkey = None
-                    
-                    # 清理可能的组合热键
-                    if old_hot_key and old_left_click:
-                        try:
-                            keyboard.remove_hotkey(f"{old_hot_key}+{old_left_click}")
-                        except:
-                            pass
-                    if old_hot_key and old_right_click:
-                        try:
-                            keyboard.remove_hotkey(f"{old_hot_key}+{old_right_click}")
-                        except:
-                            pass
                 except Exception as e:
                     logger.error(f"清理热键失败: {e}")
                 
@@ -658,10 +635,8 @@ class EventHandler:
                 if self.touchpad_active:
                     # 根据当前模式设置热键绑定
                     
-                    self.left_click_press = keyboard.on_press_key(LEFT_CLICK, lambda e: self.controller.mouse.press(mouse.Button.left), suppress=True)
-                    self.right_click_press = keyboard.on_press_key(RIGHT_CLICK, lambda e: self.controller.mouse.press(mouse.Button.right), suppress=True)
-                    self.left_click_release = keyboard.on_release_key(LEFT_CLICK, lambda e: self.controller.mouse.release(mouse.Button.left), suppress=True)
-                    self.right_click_release = keyboard.on_release_key(RIGHT_CLICK, lambda e: self.controller.mouse.release(mouse.Button.right), suppress=True)
+                    keyboard.hook_key(LEFT_CLICK, self.on_left_click)
+                    keyboard.hook_key(RIGHT_CLICK, self.on_right_click)
 
                     logger.info(f"触控板热键已更新: {LEFT_CLICK}, {RIGHT_CLICK}")
                 
