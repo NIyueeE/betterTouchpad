@@ -13,52 +13,69 @@ from tkinter import ttk, messagebox
 from .controllers import create_controller
 from .logger_config import configure_logger
 
+# 初始化日志
 logger = configure_logger()
 
-# 从src/configure.json读取配置
-try:
-    # 获取当前文件所在目录路径
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(current_dir, 'configure.json')
+# ============================== 配置加载 ==============================
+def load_config():
+    """
+    从配置文件加载设置，如果加载失败则使用默认值
     
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config = json.load(f)
+    Returns:
+        tuple: (响应时间, 热键, 左键点击按键, 右键点击按键, 模式)
+    """
+    try:
+        # 获取当前文件所在目录路径
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(current_dir, 'configure.json')
         
-    # 读取配置参数
-    RESPONSE_TIME = config["response_time"]  # 长按响应时间（秒）
-    HOT_KEY = config["hot_key"]              # 触发键
-    LEFT_CLICK = config["left_click"]        # 左键点击对应按键
-    RIGHT_CLICK = config["right_click"]      # 右键点击对应按键
-    MODE = config["mode"]                    # 0为长按模式, 1为切换模式
-    
-    logger.info(f"已从 {config_path} 加载配置")
-    
-except Exception as e:
-    logger.error(f"读取配置文件失败: {e}，使用默认配置")
-    # 默认配置参数
-    RESPONSE_TIME = 0.2  # 长按响应时间（秒）
-    HOT_KEY = 'f1'        # 触发键
-    LEFT_CLICK = 'f2'     # 左键点击对应按键
-    RIGHT_CLICK = 'f3'    # 右键点击对应按键
-    MODE = 0             # 0为长按模式, 1为切换模式
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            
+        # 读取配置参数
+        response_time = config.get("response_time", 0.2)  # 长按响应时间（秒）
+        hot_key = config.get("hot_key", "f1")             # 触发键
+        left_click = config.get("left_click", "f2")       # 左键点击对应按键
+        right_click = config.get("right_click", "f3")     # 右键点击对应按键
+        mode = config.get("mode", 0)                      # 0为长按模式, 1为切换模式
+        
+        logger.info(f"已从 {config_path} 加载配置")
+        
+    except Exception as e:
+        logger.error(f"读取配置文件失败: {e}，使用默认配置")
+        # 默认配置参数
+        response_time = 0.2
+        hot_key = 'f1'
+        left_click = 'f2'
+        right_click = 'f3'
+        mode = 0
+        
+    return response_time, hot_key, left_click, right_click, mode
+
+# 初始化全局配置变量
+RESPONSE_TIME, HOT_KEY, LEFT_CLICK, RIGHT_CLICK, MODE = load_config()
 
 class EventHandler:
     """
     触控板事件处理器
-    处理热键事件并在长按时启用触控板模式，短按时传递原始按键
+    负责检测热键事件并根据不同模式（长按/切换）处理触控板状态，
+    同时提供系统托盘和设置界面支持
     """
     def __init__(self):
+        """初始化触控板事件处理器"""
+        # 创建控制器
         self.controller = create_controller()
         self.should_exit = False
-        self.lock = threading.Lock()
+        self.lock = threading.Lock()  # 线程锁，确保线程安全
         
-        # 热键状态跟踪
-        self.hotkey_pressed_time = 0
-        self.hotkey_is_pressed = False
-        self.long_press_triggered = False
-        self.is_simulating = False
-        self.touchpad_active = False  # 新增：跟踪触控板是否激活
-
+        # --------- 状态跟踪 ---------
+        # 热键状态追踪
+        self.hotkey_pressed_time = 0    # 热键按下的时间戳
+        self.hotkey_is_pressed = False  # 热键是否处于按下状态
+        self.long_press_triggered = False  # 是否已触发长按事件
+        self.is_simulating = False      # 是否正在模拟按键
+        self.touchpad_active = False    # 触控板是否激活
+        
         # 鼠标点击状态跟踪
         self.left_click_pressed = False
         self.right_click_pressed = False
@@ -70,66 +87,91 @@ class EventHandler:
         self.press_hotkey = None
         self.hotkey_down = None
         
-        # 系统托盘图标
+        # 系统托盘相关
         self.tray_icon = None
         self.tray_thread = None
         
-        # 用于跨线程通信的队列
+        # 跨线程通信队列
         self.command_queue = queue.Queue()
         
-        # 正在显示设置窗口的标志
+        # UI状态
         self.settings_window_open = False
     
+    # ============================== 鼠标点击处理 ==============================
     def on_left_click(self, event):
+        """
+        处理左键点击事件
+        
+        Args:
+            event: 键盘事件对象
+        """
         if event.name == LEFT_CLICK:
             if event.event_type == 'down' and not self.left_click_pressed:
+                # 按下左键并更新状态
                 self.controller.mouse.press(mouse.Button.left)
                 self.left_click_pressed = True
             elif event.event_type == 'up':
+                # 释放左键并重置状态
                 self.controller.mouse.release(mouse.Button.left)
                 self.left_click_pressed = False
 
     def on_right_click(self, event):
+        """
+        处理右键点击事件
+        
+        Args:
+            event: 键盘事件对象
+        """
         if event.name == RIGHT_CLICK:
             if event.event_type == 'down' and not self.right_click_pressed:
+                # 按下右键并更新状态
                 self.controller.mouse.press(mouse.Button.right)
                 self.right_click_pressed = True
             elif event.event_type == 'up':
+                # 释放右键并重置状态
                 self.controller.mouse.release(mouse.Button.right)
                 self.right_click_pressed = False
 
+    # ============================== 触控板模式控制 ==============================
     def handle_long_press(self):
         """处理长按事件 - 激活触控板模式"""
         with self.lock:
             # 避免热键重复触发
             self.hotkey_down = keyboard.on_press_key(HOT_KEY, lambda e: None, suppress=True)
             
+            # 判断是否满足长按条件
             if time.time() - self.hotkey_pressed_time >= RESPONSE_TIME and self.hotkey_is_pressed:
                 self.long_press_triggered = True
                 
-                # 切换模式下，根据当前状态决定是否启用触控板
-                if MODE == 1:
+                # 根据不同模式处理触控板状态
+                if MODE == 1:  # 切换模式
                     self.touchpad_active = not self.touchpad_active
                     self.controller.toggle(self.touchpad_active)
-                else:
+                else:  # 长按模式
                     self.touchpad_active = True
                     self.controller.toggle(True)  # 启用触控板
                 
                 keyboard.release(HOT_KEY)  # 释放热键，防止粘滞
                 
+                # 根据触控板状态设置按键绑定
                 if self.touchpad_active:
-                    # 设置鼠标点击热键
+                    # 绑定鼠标点击热键
                     keyboard.hook_key(LEFT_CLICK, self.on_left_click, suppress=True)
                     keyboard.hook_key(RIGHT_CLICK, self.on_right_click, suppress=True)
-
                     logger.info(f"触控板启用，{LEFT_CLICK},{RIGHT_CLICK}绑定")
                 else:
                     logger.info(f"触控板禁用，{LEFT_CLICK},{RIGHT_CLICK}解绑")
 
     def on_key_event(self, event):
         """
-        处理键盘事件
-        根据热键的按下和释放事件控制触控板模式
+        处理键盘事件，根据热键的按下和释放事件控制触控板模式
+        
+        Args:
+            event: 键盘事件对象
+            
+        Returns:
+            False: 阻止事件传递到系统
+            None: 允许事件传递到系统
         """
         logger.debug(f"Key event: {event.name} {event.event_type}")
         
@@ -180,16 +222,19 @@ class EventHandler:
                             self.long_press_timer = None
 
                         if self.long_press_triggered:
-                            # 根据模式决定热键释放后的行为
-                            if MODE == 0:  # 长按模式：释放热键后关闭触控板
+                            # 长按模式：释放热键后关闭触控板
+                            if MODE == 0:
                                 self.controller.toggle(False)
-
-                                keyboard.unhook(self.on_left_click)
-                                keyboard.unhook(self.on_right_click)
-
+                                # 解绑键盘钩子
+                                try:
+                                    keyboard.unhook(self.on_left_click)
+                                    keyboard.unhook(self.on_right_click)
+                                except Exception as e:
+                                    logger.error(f"解绑按键失败: {e}或者按键未绑定")
                                 self.touchpad_active = False
                                 logger.info(f"触控板禁用，{LEFT_CLICK},{RIGHT_CLICK}解绑")
-                            # 切换模式下不需要在热键释放时关闭触控板
+                                
+                            # 无论哪种模式，都需要清理状态
                             self.long_press_triggered = False
                             keyboard.unhook(self.hotkey_down)
                         else:
@@ -215,8 +260,9 @@ class EventHandler:
             
         return None
 
+    # ============================== 主程序运行 ==============================
     def run(self):
-        """启动事件处理服务"""
+        """启动事件处理服务，包括键盘钩子和系统托盘"""
         try:
             # 注册键盘钩子
             keyboard.hook(self.on_key_event)
@@ -229,7 +275,7 @@ class EventHandler:
             self.tray_thread.start()
             logger.info("系统托盘图标已启动")
             
-            # 主循环
+            # 主循环 - 处理队列中的命令
             while not self.should_exit:
                 time.sleep(0.1)
                 self._process_command_queue()
@@ -239,29 +285,44 @@ class EventHandler:
         except Exception as e:
             logger.error(f"运行时错误: {e}")
         finally:
-            # 清理资源
-            try:
-                self.controller.cleanup()
-            except Exception as e:
-                logger.error(f"清理控制器失败: {e}")
-                
-            try:
-                keyboard.unhook_all()
-            except Exception as e:
-                logger.error(f"卸载钩子失败: {e}")
-            
-            # 停止系统托盘图标
-            if self.tray_icon:
-                try:
-                    self.tray_icon.stop()
-                except Exception as e:
-                    logger.error(f"停止系统托盘图标失败: {e}")
-                
+            # 清理所有资源
+            self._cleanup_resources()
             logger.info("服务已停止")
+    
+    def _cleanup_resources(self):
+        """清理所有资源，包括控制器、键盘钩子和系统托盘"""
+        # 清理控制器
+        try:
+            self.controller.cleanup()
+        except Exception as e:
+            logger.error(f"清理控制器失败: {e}")
+            
+        # 清理键盘钩子
+        try:
+            keyboard.unhook_all()
+        except Exception as e:
+            logger.error(f"卸载钩子失败: {e}")
+        
+        # 停止系统托盘图标
+        if self.tray_icon:
+            try:
+                self.tray_icon.stop()
+            except Exception as e:
+                logger.error(f"停止系统托盘图标失败: {e}")
+
+    def _start_tray_icon(self):
+        """在独立线程中启动系统托盘图标"""
+        self.tray_icon = self._create_tray_icon()
+        self.tray_icon.run()
 
     def _create_tray_icon(self):
-        """创建系统托盘图标"""
-        # 创建一个简单的图标
+        """
+        创建系统托盘图标
+        
+        Returns:
+            pystray.Icon: 创建的系统托盘图标对象
+        """
+        # 创建图标路径
         current_dir = os.path.dirname(os.path.abspath(__file__))
         icon_path = os.path.join(current_dir, './source/icon.png')
         
@@ -277,24 +338,15 @@ class EventHandler:
                 icon_path = os.path.join(current_dir, 'icon.png')
         
         # 检查图标是否存在，不存在则创建一个默认图标
+        image = None
         if not os.path.exists(icon_path):
             # 创建一个蓝色圆形图标，表示触控板
-            image = Image.new('RGBA', (64, 64), color=(0, 0, 0, 0))
-            
-            # 画一个圆
-            draw = ImageDraw.Draw(image)
-            draw.ellipse([(4, 4), (60, 60)], fill=(0, 120, 212), outline=(255, 255, 255, 128), width=2)
-            
-            # 在中间画一个小的触控点
-            draw.ellipse([(28, 28), (36, 36)], fill=(255, 255, 255))
-            
-            # 保存图像
+            image = self._create_default_icon()
             try:
                 image.save(icon_path)
                 logger.info(f"创建默认图标: {icon_path}")
             except Exception as e:
                 logger.error(f"保存图标失败: {e}")
-                # 如果保存失败，尝试在内存中使用图像而不保存
         
         # 创建图标菜单
         menu = (
@@ -306,7 +358,7 @@ class EventHandler:
         
         # 创建系统托盘图标，处理图标文件不存在的情况
         try:
-            icon_image = Image.open(icon_path) if os.path.exists(icon_path) else image
+            icon_image = Image.open(icon_path) if os.path.exists(icon_path) else image or self._create_default_icon()
             icon = pystray.Icon(
                 'betterTouchpad',
                 icon_image,
@@ -325,6 +377,20 @@ class EventHandler:
                 menu
             )
             return icon
+    
+    def _create_default_icon(self):
+        """创建默认图标"""
+        # 创建一个蓝色圆形图标，表示触控板
+        image = Image.new('RGBA', (64, 64), color=(0, 0, 0, 0))
+        
+        # 画一个圆
+        draw = ImageDraw.Draw(image)
+        draw.ellipse([(4, 4), (60, 60)], fill=(0, 120, 212), outline=(255, 255, 255, 128), width=2)
+        
+        # 在中间画一个小的触控点
+        draw.ellipse([(28, 28), (36, 36)], fill=(255, 255, 255))
+        
+        return image
     
     def _toggle_mode(self, icon, item):
         """切换模式"""
@@ -352,14 +418,21 @@ class EventHandler:
             self.settings_window_open = False  # 重置标志确保用户可以再次尝试
     
     def _create_settings_window(self, parent=None):
-        """创建设置窗口"""
+        """
+        创建设置窗口
+        
+        Args:
+            parent: 父窗口对象，如果为None则创建独立窗口
+        """
         try:
-            # 如果没有提供父窗口，则创建一个新窗口
-            if parent is None:
-                settings_window = tk.Tk()
-            else:
-                settings_window = tk.Toplevel(parent)
-                
+            # 创建窗口对象
+            settings_window = tk.Tk() if parent is None else tk.Toplevel(parent)
+            
+            # 设置窗口基本属性
+            settings_window.title("Better Touchpad")
+            settings_window.geometry("450x420")
+            settings_window.resizable(False, False)
+            
             # 设置窗口关闭事件处理
             def on_window_close():
                 self.settings_window_open = False
@@ -368,184 +441,243 @@ class EventHandler:
                     parent.destroy()
             
             settings_window.protocol("WM_DELETE_WINDOW", on_window_close)
-                
-            settings_window.title("Better Touchpad 设置")
-            settings_window.geometry("450x420")  # 进一步增加窗口尺寸
-            settings_window.resizable(False, False)
             
-            # 读取当前配置
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            config_path = os.path.join(current_dir, 'configure.json')
+            # 加载当前配置
+            config_data = self._load_settings_config()
             
-            try:
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    
-                response_time = config.get("response_time", 0.2)
-                hot_key = config.get("hot_key", "f1")
-                left_click = config.get("left_click", "f2")
-                right_click = config.get("right_click", "f3")
-                mode = config.get("mode", 0)
-            except Exception as e:
-                logger.error(f"读取配置失败: {e}")
-                response_time = 0.2
-                hot_key = "f1"
-                left_click = "f2"
-                right_click = "f3"
-                mode = 0
-            
-            # 创建设置界面 - 增加内边距
+            # 创建主框架
             main_frame = ttk.Frame(settings_window, padding=25)
             main_frame.pack(fill=tk.BOTH, expand=True)
             
-            # 标题
+            # 添加标题
             ttk.Label(main_frame, text="Better Touchpad 设置", font=("Arial", 14, "bold")).pack(pady=(0, 25))
             
-            # 创建设置项
-            settings_frame = ttk.Frame(main_frame)
-            settings_frame.pack(fill=tk.BOTH, expand=True)
+            # 创建设置选项
+            self._create_settings_controls(main_frame, config_data)
             
-            # 调整各行的间距
-            row_pady = 8  # 行间距
+            # 创建保存和取消按钮
+            self._create_settings_buttons(main_frame, settings_window, parent, config_data)
             
-            # 响应时间
-            ttk.Label(settings_frame, text="长按响应时间 (秒):", font=("Arial", 10)).grid(row=0, column=0, sticky=tk.W, pady=row_pady)
-            response_time_var = tk.StringVar(value=str(response_time))
-            ttk.Entry(settings_frame, textvariable=response_time_var, width=15).grid(row=0, column=1, sticky=tk.W, pady=row_pady, padx=10)
+            # 调整窗口大小和位置
+            self._adjust_settings_window(settings_window)
             
-            # 创建功能键选项
-            function_keys = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"]
-            
-            # 热键
-            ttk.Label(settings_frame, text="触发键:", font=("Arial", 10)).grid(row=1, column=0, sticky=tk.W, pady=row_pady)
-            hot_key_var = tk.StringVar(value=hot_key if hot_key in function_keys else "f1")
-            hot_key_combo = ttk.Combobox(settings_frame, textvariable=hot_key_var, values=function_keys, width=12, state="readonly")
-            hot_key_combo.grid(row=1, column=1, sticky=tk.W, pady=row_pady, padx=10)
-            
-            # 左键点击
-            ttk.Label(settings_frame, text="左键点击对应按键:", font=("Arial", 10)).grid(row=2, column=0, sticky=tk.W, pady=row_pady)
-            left_click_var = tk.StringVar(value=left_click if left_click in function_keys else "f2")
-            left_click_combo = ttk.Combobox(settings_frame, textvariable=left_click_var, values=function_keys, width=12, state="readonly")
-            left_click_combo.grid(row=2, column=1, sticky=tk.W, pady=row_pady, padx=10)
-            
-            # 右键点击
-            ttk.Label(settings_frame, text="右键点击对应按键:", font=("Arial", 10)).grid(row=3, column=0, sticky=tk.W, pady=row_pady)
-            right_click_var = tk.StringVar(value=right_click if right_click in function_keys else "f3")
-            right_click_combo = ttk.Combobox(settings_frame, textvariable=right_click_var, values=function_keys, width=12, state="readonly")
-            right_click_combo.grid(row=3, column=1, sticky=tk.W, pady=row_pady, padx=10)
-            
-            # 模式选择 - 使用单独的框架并添加标题
-            mode_frame = ttk.LabelFrame(main_frame, text="操作模式", padding=(15, 5))
-            mode_frame.pack(fill=tk.X, expand=False, pady=15)
-            
-            mode_var = tk.IntVar(value=mode)
-            ttk.Radiobutton(mode_frame, text="长按模式", variable=mode_var, value=0).pack(anchor=tk.W, pady=3)
-            ttk.Radiobutton(mode_frame, text="切换模式", variable=mode_var, value=1).pack(anchor=tk.W, pady=3)
-            
-            # 按钮区域 - 增加按钮的大小和醒目程度
-            button_frame = ttk.Frame(main_frame)
-            button_frame.pack(fill=tk.X, pady=(25, 0))
-            
-            # 保存按钮
-            def save_settings():
-                try:
-                    # 验证配置值
-                    try:
-                        # 验证响应时间是数字且合理
-                        response_time_val = float(response_time_var.get())
-                        if response_time_val <= 0 or response_time_val > 10:
-                            messagebox.showerror("错误", "响应时间必须是大于0且不超过10的数值")
-                            return
-                            
-                        # 验证按键选择 - 不能相同
-                        if left_click_var.get() == right_click_var.get() or left_click_var.get() == hot_key_var.get() or right_click_var.get() == hot_key_var.get():
-                            messagebox.showerror("错误", "触发键、左键点击和右键点击对应按键不能相同")
-                            return
-                    except ValueError:
-                        messagebox.showerror("错误", "响应时间必须是数字")
-                        return
-                    
-                    # 更新配置
-                    new_config = {
-                        "response_time": float(response_time_var.get()),
-                        "hot_key": hot_key_var.get(),
-                        "left_click": left_click_var.get(),
-                        "right_click": right_click_var.get(),
-                        "mode": mode_var.get()
-                    }
-                    
-                    # 保存到文件
-                    try:
-                        with open(config_path, 'w', encoding='utf-8') as f:
-                            json.dump(new_config, f, indent=4, ensure_ascii=False)
-                    except Exception as e:
-                        messagebox.showerror("错误", f"保存配置文件失败: {str(e)}")
-                        logger.error(f"保存配置文件失败: {e}")
-                        return
-                    
-                    # 重新加载配置并立即应用
-                    if self.reload_config():
-                        logger.info("设置已保存并立即生效")
-                    else:
-                        messagebox.showwarning("警告", "设置已保存，但应用更改失败，可能需要重启应用")
-                    
-                    # 关闭窗口
-                    self.settings_window_open = False
-                    settings_window.destroy()
-                    if parent:
-                        parent.destroy()
-                        
-                    logger.info("用户更新了配置并应用")
-                except Exception as e:
-                    messagebox.showerror("错误", f"保存配置失败: {str(e)}")
-                    logger.error(f"保存配置失败: {e}")
-                    # 确保发生错误时也能正确重置窗口状态
-                    self.settings_window_open = False
-            
-            # 取消按钮
-            def cancel_settings():
-                self.settings_window_open = False
-                settings_window.destroy()
-                if parent:
-                    parent.destroy()
-            
-            # 使用更大的按钮
-            save_button = ttk.Button(button_frame, text="保存", command=save_settings, width=10)
-            save_button.pack(side=tk.RIGHT, padx=8)
-            
-            cancel_button = ttk.Button(button_frame, text="取消", command=cancel_settings, width=10)
-            cancel_button.pack(side=tk.RIGHT, padx=8)
-            
-            # 先显示窗口，然后计算尺寸并居中
-            settings_window.update()
-            
-            # 确保按钮可见
-            settings_window.update_idletasks()
-            
-            # 获取窗口实际尺寸
-            width = settings_window.winfo_width()
-            height = settings_window.winfo_height()
-            
-            # 确保窗口尺寸足够大
-            if width < 450:
-                width = 450
-            if height < 500:
-                height = 500
-            
-            # 居中窗口
-            x = (settings_window.winfo_screenwidth() // 2) - (width // 2)
-            y = (settings_window.winfo_screenheight() // 2) - (height // 2)
-            settings_window.geometry(f'{width}x{height}+{x}+{y}')
-            
-            # 设置为模态窗口，但不使用grab_set以避免线程问题
-            settings_window.transient(parent if parent else None)
-            
+            # 启动窗口主循环
             if parent is None:
                 settings_window.mainloop()
+                
         except Exception as e:
             logger.error(f"创建设置窗口失败: {e}")
             self.settings_window_open = False
     
+    def _load_settings_config(self):
+        """
+        加载设置窗口使用的配置数据
+        
+        Returns:
+            dict: 包含当前配置的字典
+        """
+        try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(current_dir, 'configure.json')
+            
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                
+            response_time = config.get("response_time", 0.2)
+            hot_key = config.get("hot_key", "f1")
+            left_click = config.get("left_click", "f2")
+            right_click = config.get("right_click", "f3")
+            mode = config.get("mode", 0)
+            
+            return {
+                "response_time": response_time,
+                "hot_key": hot_key,
+                "left_click": left_click,
+                "right_click": right_click,
+                "mode": mode,
+                "config_path": config_path
+            }
+        except Exception as e:
+            logger.error(f"读取配置失败: {e}")
+            return {
+                "response_time": 0.2,
+                "hot_key": "f1",
+                "left_click": "f2",
+                "right_click": "f3",
+                "mode": 0,
+                "config_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'configure.json')
+            }
+    
+    def _create_settings_controls(self, parent_frame, config_data):
+        """
+        创建设置界面的控件
+        
+        Args:
+            parent_frame: 父框架
+            config_data: 配置数据字典
+        """
+        # 创建设置框架
+        settings_frame = ttk.Frame(parent_frame)
+        settings_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 设置行间距
+        row_pady = 8
+        
+        # 功能键选项
+        function_keys = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", 
+                         "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24"]
+        
+        # 响应时间设置
+        ttk.Label(settings_frame, text="长按响应时间 (秒):", font=("Arial", 10)).grid(row=0, column=0, sticky=tk.W, pady=row_pady)
+        response_time_var = tk.StringVar(value=str(config_data["response_time"]))
+        ttk.Entry(settings_frame, textvariable=response_time_var, width=15).grid(row=0, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        config_data["response_time_var"] = response_time_var
+        
+        # 热键设置
+        ttk.Label(settings_frame, text="触发键:", font=("Arial", 10)).grid(row=1, column=0, sticky=tk.W, pady=row_pady)
+        hot_key_var = tk.StringVar(value=config_data["hot_key"] if config_data["hot_key"] in function_keys else "f1")
+        hot_key_combo = ttk.Combobox(settings_frame, textvariable=hot_key_var, values=function_keys, width=12, state="readonly")
+        hot_key_combo.grid(row=1, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        config_data["hot_key_var"] = hot_key_var
+        
+        # 左键点击设置
+        ttk.Label(settings_frame, text="左键点击:", font=("Arial", 10)).grid(row=2, column=0, sticky=tk.W, pady=row_pady)
+        left_click_var = tk.StringVar(value=config_data["left_click"] if config_data["left_click"] in function_keys else "f2")
+        left_click_combo = ttk.Combobox(settings_frame, textvariable=left_click_var, values=function_keys, width=12, state="readonly")
+        left_click_combo.grid(row=2, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        config_data["left_click_var"] = left_click_var
+        
+        # 右键点击设置
+        ttk.Label(settings_frame, text="右键点击:", font=("Arial", 10)).grid(row=3, column=0, sticky=tk.W, pady=row_pady)
+        right_click_var = tk.StringVar(value=config_data["right_click"] if config_data["right_click"] in function_keys else "f3")
+        right_click_combo = ttk.Combobox(settings_frame, textvariable=right_click_var, values=function_keys, width=12, state="readonly")
+        right_click_combo.grid(row=3, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        config_data["right_click_var"] = right_click_var
+        
+        # 模式选择 - 使用单独的框架并添加标题
+        mode_frame = ttk.LabelFrame(parent_frame, text="操作模式", padding=(15, 5))
+        mode_frame.pack(fill=tk.X, expand=False, pady=15)
+        
+        mode_var = tk.IntVar(value=config_data["mode"])
+        ttk.Radiobutton(mode_frame, text="长按模式", variable=mode_var, value=0).pack(anchor=tk.W, pady=3)
+        ttk.Radiobutton(mode_frame, text="切换模式", variable=mode_var, value=1).pack(anchor=tk.W, pady=3)
+        config_data["mode_var"] = mode_var
+    
+    def _create_settings_buttons(self, parent_frame, settings_window, parent, config_data):
+        """
+        创建设置窗口的按钮
+        
+        Args:
+            parent_frame: 父框架
+            settings_window: 设置窗口
+            parent: 父窗口
+            config_data: 配置数据字典
+        """
+        # 按钮区域
+        button_frame = ttk.Frame(parent_frame)
+        button_frame.pack(fill=tk.X, pady=(25, 0))
+        
+        # 保存按钮
+        def save_settings():
+            try:
+                # 验证配置值
+                try:
+                    # 验证响应时间
+                    response_time_val = float(config_data["response_time_var"].get())
+                    if response_time_val <= 0 or response_time_val > 10:
+                        messagebox.showerror("错误", "响应时间必须是大于0且不超过10的数值")
+                        return
+                        
+                    # 验证按键选择 - 不能相同
+                    if (config_data["left_click_var"].get() == config_data["right_click_var"].get() or 
+                        config_data["left_click_var"].get() == config_data["hot_key_var"].get() or 
+                        config_data["right_click_var"].get() == config_data["hot_key_var"].get()):
+                        messagebox.showerror("错误", "触发键、左键点击和右键点击对应按键不能相同")
+                        return
+                except ValueError:
+                    messagebox.showerror("错误", "响应时间必须是数字")
+                    return
+                
+                # 更新配置
+                new_config = {
+                    "response_time": float(config_data["response_time_var"].get()),
+                    "hot_key": config_data["hot_key_var"].get(),
+                    "left_click": config_data["left_click_var"].get(),
+                    "right_click": config_data["right_click_var"].get(),
+                    "mode": config_data["mode_var"].get()
+                }
+                
+                # 保存到文件
+                try:
+                    with open(config_data["config_path"], 'w', encoding='utf-8') as f:
+                        json.dump(new_config, f, indent=4, ensure_ascii=False)
+                except Exception as e:
+                    messagebox.showerror("错误", f"保存配置文件失败: {str(e)}")
+                    logger.error(f"保存配置文件失败: {e}")
+                    return
+                
+                # 重新加载配置并立即应用
+                if self.reload_config():
+                    logger.info("设置已保存并立即生效")
+                else:
+                    messagebox.showwarning("警告", "设置已保存，但应用更改失败，可能需要重启应用")
+                
+                # 关闭窗口
+                self.settings_window_open = False
+                settings_window.destroy()
+                if parent:
+                    parent.destroy()
+                    
+                logger.info("用户更新了配置并应用")
+            except Exception as e:
+                messagebox.showerror("错误", f"保存配置失败: {str(e)}")
+                logger.error(f"保存配置失败: {e}")
+                # 确保发生错误时也能正确重置窗口状态
+                self.settings_window_open = False
+        
+        # 取消按钮
+        def cancel_settings():
+            self.settings_window_open = False
+            settings_window.destroy()
+            if parent:
+                parent.destroy()
+        
+        # 添加按钮
+        save_button = ttk.Button(button_frame, text="保存", command=save_settings, width=10)
+        save_button.pack(side=tk.RIGHT, padx=8)
+        
+        cancel_button = ttk.Button(button_frame, text="取消", command=cancel_settings, width=10)
+        cancel_button.pack(side=tk.RIGHT, padx=8)
+    
+    def _adjust_settings_window(self, window):
+        """
+        调整设置窗口的大小和位置
+        
+        Args:
+            window: 要调整的窗口对象
+        """
+        # 更新窗口
+        window.update()
+        window.update_idletasks()
+        
+        # 获取窗口实际尺寸
+        width = window.winfo_width()
+        height = window.winfo_height()
+        
+        # 确保窗口尺寸足够大
+        if width < 450:
+            width = 450
+        if height < 500:
+            height = 500
+        
+        # 居中窗口
+        x = (window.winfo_screenwidth() // 2) - (width // 2)
+        y = (window.winfo_screenheight() // 2) - (height // 2)
+        window.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # 设置为模态窗口，但不使用grab_set以避免线程问题
+        window.lift()
+
     def _exit_app(self, icon, item):
         """退出应用"""
         logger.info("用户从系统托盘退出应用")
@@ -568,20 +700,18 @@ class EventHandler:
         except Exception as e:
             logger.error(f"清理热键失败: {e}")
             
-        # 关闭触控板控制器
-        try:
-            self.controller.cleanup()
-        except Exception as e:
-            logger.error(f"清理控制器失败: {e}")
-            
-        # 移除所有钩子确保彻底清理
-        try:
-            keyboard.unhook_all()
-        except Exception as e:
-            logger.error(f"卸载钩子失败: {e}")
+        # 完全清理其他资源
+        self._cleanup_resources()
 
+    # ============================== 配置管理 ==============================
     def _update_config(self, key, value):
-        """更新配置"""
+        """
+        更新配置文件中的单个配置项
+        
+        Args:
+            key: 配置项键名
+            value: 配置项值
+        """
         try:
             current_dir = os.path.dirname(os.path.abspath(__file__))
             config_path = os.path.join(current_dir, 'configure.json')
@@ -598,13 +728,13 @@ class EventHandler:
         except Exception as e:
             logger.error(f"更新配置失败: {e}")
     
-    def _start_tray_icon(self):
-        """在独立线程中启动系统托盘图标"""
-        self.tray_icon = self._create_tray_icon()
-        self.tray_icon.run()
-
     def reload_config(self):
-        """重新加载配置文件并应用更改"""
+        """
+        重新加载配置文件并应用更改
+        
+        Returns:
+            bool: 重新加载是否成功
+        """
         global RESPONSE_TIME, HOT_KEY, LEFT_CLICK, RIGHT_CLICK, MODE
         
         try:
@@ -614,7 +744,7 @@ class EventHandler:
             
             # 使用锁确保线程安全
             with self.lock:
-                # 备份当前热键配置，以便清理
+                # 备份当前模式配置
                 old_mode = MODE
                 
                 # 读取配置文件
@@ -630,9 +760,14 @@ class EventHandler:
                 
                 logger.info(f"重新加载配置: 响应时间={RESPONSE_TIME}, 热键={HOT_KEY}, 左键={LEFT_CLICK}, 右键={RIGHT_CLICK}, 模式={MODE}")
                 
-                keyboard.unhook(self.on_left_click)
-                keyboard.unhook(self.on_right_click)
+                # 解绑当前绑定的按键
+                try:
+                    keyboard.unhook(self.on_left_click)
+                    keyboard.unhook(self.on_right_click)
+                except Exception as e:
+                    logger.error(f"解绑按键失败: {e}或者按键未绑定")
 
+                # 清理现有热键
                 try:
                     if self.press_hotkey:
                         keyboard.remove_hotkey(self.press_hotkey)
@@ -642,17 +777,14 @@ class EventHandler:
                 
                 # 如果触控板处于激活状态，重新设置热键绑定
                 if self.touchpad_active:
-                    # 根据当前模式设置热键绑定
-                    
-                    keyboard.hook_key(LEFT_CLICK, self.on_left_click)
-                    keyboard.hook_key(RIGHT_CLICK, self.on_right_click)
-
+                    keyboard.hook_key(LEFT_CLICK, self.on_left_click, suppress=True)
+                    keyboard.hook_key(RIGHT_CLICK, self.on_right_click, suppress=True)
                     logger.info(f"触控板热键已更新: {LEFT_CLICK}, {RIGHT_CLICK}")
                 
                 # 重新注册主热键
                 self.press_hotkey = keyboard.add_hotkey(HOT_KEY, lambda: None, suppress=True)
                 
-                # 如果模式从长按切换到切换模式或反之，可能需要调整触控板状态
+                # 处理模式改变的情况
                 if old_mode != MODE and self.touchpad_active:
                     if MODE == 0:  # 切换到长按模式
                         # 长按模式下需保持按住热键才能使用触控板，所以这里关闭触控板
