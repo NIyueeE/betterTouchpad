@@ -58,6 +58,10 @@ class EventHandler:
         self.long_press_triggered = False
         self.is_simulating = False
         self.touchpad_active = False  # 新增：跟踪触控板是否激活
+
+        # 鼠标点击状态跟踪
+        self.left_click_pressed = False
+        self.right_click_pressed = False
         
         # 定时器
         self.long_press_timer = None
@@ -78,16 +82,21 @@ class EventHandler:
     
     def on_left_click(self, event):
         if event.name == LEFT_CLICK:
-            if event.event_type == 'down':
+            if event.event_type == 'down' and not self.left_click_pressed:
                 self.controller.mouse.press(mouse.Button.left)
+                self.left_click_pressed = True
             elif event.event_type == 'up':
                 self.controller.mouse.release(mouse.Button.left)
+                self.left_click_pressed = False
+
     def on_right_click(self, event):
         if event.name == RIGHT_CLICK:
-            if event.event_type == 'down':
+            if event.event_type == 'down' and not self.right_click_pressed:
                 self.controller.mouse.press(mouse.Button.right)
+                self.right_click_pressed = True
             elif event.event_type == 'up':
                 self.controller.mouse.release(mouse.Button.right)
+                self.right_click_pressed = False
 
     def handle_long_press(self):
         """处理长按事件 - 激活触控板模式"""
