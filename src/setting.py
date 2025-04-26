@@ -362,8 +362,17 @@ class SettingsManager:
         mode_frame.pack(fill=tk.X, expand=False, pady=15)
         
         mode_var = tk.IntVar(value=config_data["mode"])
-        ttk.Radiobutton(mode_frame, text="长按模式", variable=mode_var, value=0).pack(anchor=tk.W, pady=3)
-        ttk.Radiobutton(mode_frame, text="切换模式", variable=mode_var, value=1).pack(anchor=tk.W, pady=3)
+        mode_0_radio = ttk.Radiobutton(mode_frame, text="长按模式", variable=mode_var, value=0)
+        mode_0_radio.pack(anchor=tk.W, pady=3)
+        mode_1_radio = ttk.Radiobutton(mode_frame, text="切换模式", variable=mode_var, value=1)
+        mode_1_radio.pack(anchor=tk.W, pady=3)
+        
+        # 确保选中当前模式的单选按钮
+        if config_data["mode"] == 0:
+            mode_0_radio.invoke()
+        else:
+            mode_1_radio.invoke()
+            
         config_data["mode_var"] = mode_var
     
     def _create_settings_buttons(self, parent_frame, settings_window, parent, config_data):
