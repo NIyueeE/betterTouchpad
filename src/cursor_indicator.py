@@ -104,7 +104,7 @@ class CursorIndicator:
             if platform.system() == 'Windows':
                 self.root.wm_attributes('-transparentcolor', '#00ff00')
             elif platform.system() == 'Linux':
-                self.root.attributes('-alpha', 0.9)
+                self.root.attributes('-alpha', 0.98)
             
             # 加载图标
             self._load_icon(icon_type)
