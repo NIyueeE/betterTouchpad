@@ -7,25 +7,18 @@
             "request": "launch",
             "module": "src.main",
             "justMyCode": false,
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            }
-        },
-        {
-            "name": "Python: 带管理员权限 (Windows)",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "touchpad_controller.main",
-            "justMyCode": false,
-            "console": "externalTerminal",
             "cwd": "${workspaceFolder}",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
             "windows": {
-                "args": ["-m", "touchpad_controller.main"],
+                "console": "integratedTerminal"
+            },
+            "linux": {
+                "console": "integratedTerminal",
+                "sudo": true,
+                "python": "python3",
+                "args": []
             }
         }
     ]
