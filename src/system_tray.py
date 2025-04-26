@@ -130,13 +130,20 @@ class SystemTrayController:
                 logger.error(f"保存默认图标失败: {e}")
         
         # 创建图标菜单
-        menu = (
-            pystray.MenuItem('切换模式', self._toggle_mode),
-            pystray.MenuItem('设置', self._open_settings),
-            pystray.MenuItem('刷新配置', self._reload_config),
-            pystray.MenuItem('退出', self._exit_app),
-        )
-        
+        if platform.system() == 'Windows':
+            menu = (
+                pystray.MenuItem('切换模式', self._toggle_mode),
+                pystray.MenuItem('设置', self._open_settings),
+                pystray.MenuItem('刷新配置', self._reload_config),
+                pystray.MenuItem('退出', self._exit_app),
+            )
+        elif platform.system() == 'Linux':
+            menu = (
+                pystray.MenuItem('切换模式', self._toggle_mode),
+                pystray.MenuItem('刷新配置', self._reload_config),
+                pystray.MenuItem('退出', self._exit_app),
+            )
+            
         # 创建系统托盘图标
         try:
             return pystray.Icon(

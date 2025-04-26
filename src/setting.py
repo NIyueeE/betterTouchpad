@@ -187,18 +187,29 @@ class SettingsManager:
                     try:
                         current_dir = os.path.dirname(os.path.abspath(__file__))
 
-                        # linux可能不支持ico图标
+                        # 根据不同系统使用不同的图标设置方法
                         if platform.system() == "Windows":
                             icon_name = 'setting_icon.ico'
-                        elif platform.system() == "Linux":
-                            icon_name = 'setting_icon.png'
-                    
-                        icon_path = os.path.join(current_dir, 'source', icon_name)
-                        if os.path.exists(icon_path):
-                            settings_window.iconbitmap(icon_path)
-                            logger.info(f"已设置窗口图标: {icon_path}")
-                        else:
-                            logger.error(f"窗口图标文件不存在: {icon_path}")
+                            icon_path = os.path.join(current_dir, 'source', icon_name)
+                            if os.path.exists(icon_path):
+                                settings_window.iconbitmap(icon_path)
+                                logger.info(f"已设置窗口图标: {icon_path}")
+                            else:
+                                logger.error(f"窗口图标文件不存在: {icon_path}")
+
+                        #elif platform.system() == "Linux":
+                        #    icon_name = 'setting_icon.png'
+                        #    # 好像不支持png格式, 到时候再修复吧, 不修复了。linux取消设置窗口!!!
+                        #    icon_path = os.path.join(current_dir, 'source', icon_name)
+                        #    if os.path.exists(icon_path):
+                        #        icon_img = tk.PhotoImage(file=icon_path)
+                        #        settings_window.iconphoto(True, icon_img)
+                        #        # 保持引用以防止图像被垃圾回收
+                        #        settings_window.icon_image = icon_img
+                        #        logger.info(f"已设置窗口图标: {icon_path}")
+                        #    else:
+                        #        logger.error(f"窗口图标文件不存在: {icon_path}")
+                        
                     except Exception as e:
                         logger.error(f"设置窗口图标失败: {e}")
                     
@@ -317,28 +328,33 @@ class SettingsManager:
         # 响应时间设置
         ttk.Label(settings_frame, text="长按响应时间 (秒):", font=("Arial", 10)).grid(row=0, column=0, sticky=tk.W, pady=row_pady)
         response_time_var = tk.StringVar(value=str(config_data["response_time"]))
-        ttk.Entry(settings_frame, textvariable=response_time_var, width=15).grid(row=0, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        response_time_entry = ttk.Entry(settings_frame, textvariable=response_time_var, width=15)
+        response_time_entry.grid(row=0, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        response_time_entry.insert(0, str(config_data["response_time"]))  # 显式设置初始值
         config_data["response_time_var"] = response_time_var
         
         # 热键设置
         ttk.Label(settings_frame, text="触发键:", font=("Arial", 10)).grid(row=1, column=0, sticky=tk.W, pady=row_pady)
-        hot_key_var = tk.StringVar(value=config_data["hot_key"] if config_data["hot_key"] in function_keys else "f1")
+        hot_key_var = tk.StringVar(value=config_data["hot_key"])
         hot_key_combo = ttk.Combobox(settings_frame, textvariable=hot_key_var, values=function_keys, width=12, state="readonly")
         hot_key_combo.grid(row=1, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        hot_key_combo.set(config_data["hot_key"] if config_data["hot_key"] in function_keys else "f1")  # 显式设置初始值
         config_data["hot_key_var"] = hot_key_var
         
         # 左键点击设置
         ttk.Label(settings_frame, text="左键点击:", font=("Arial", 10)).grid(row=2, column=0, sticky=tk.W, pady=row_pady)
-        left_click_var = tk.StringVar(value=config_data["left_click"] if config_data["left_click"] in function_keys else "f2")
+        left_click_var = tk.StringVar(value=config_data["left_click"])
         left_click_combo = ttk.Combobox(settings_frame, textvariable=left_click_var, values=function_keys, width=12, state="readonly")
         left_click_combo.grid(row=2, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        left_click_combo.set(config_data["left_click"] if config_data["left_click"] in function_keys else "f2")  # 显式设置初始值
         config_data["left_click_var"] = left_click_var
         
         # 右键点击设置
         ttk.Label(settings_frame, text="右键点击:", font=("Arial", 10)).grid(row=3, column=0, sticky=tk.W, pady=row_pady)
-        right_click_var = tk.StringVar(value=config_data["right_click"] if config_data["right_click"] in function_keys else "f3")
+        right_click_var = tk.StringVar(value=config_data["right_click"])
         right_click_combo = ttk.Combobox(settings_frame, textvariable=right_click_var, values=function_keys, width=12, state="readonly")
         right_click_combo.grid(row=3, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        right_click_combo.set(config_data["right_click"] if config_data["right_click"] in function_keys else "f3")  # 显式设置初始值
         config_data["right_click_var"] = right_click_var
         
         # 模式选择 - 使用单独的框架并添加标题
@@ -435,7 +451,7 @@ class SettingsManager:
     
     def _adjust_settings_window(self, window):
         """
-        调整设置窗口的大小和位置，使其居中显示
+        调整设置窗口的大小和位置，使其根据屏幕分辨率自适应并居中显示
         
         Args:
             window: 要调整的窗口对象
@@ -444,21 +460,35 @@ class SettingsManager:
         window.update()
         window.update_idletasks()
         
-        # 获取窗口实际尺寸
-        width = window.winfo_width()
-        height = window.winfo_height()
+        # 获取屏幕尺寸
+        screen_width = window.winfo_screenwidth()
+        screen_height = window.winfo_screenheight()
         
-        # 确保窗口尺寸足够大
-        if width < 450:
-            width = 450
-        if height < 500:
-            height = 500
+        # 根据屏幕分辨率计算窗口尺寸
+        # 在较小屏幕上使用较小的比例，较大屏幕上使用较大的比例
+        if screen_width <= 1366:  # 小屏幕
+            width = int(screen_width * 0.175)
+            height = int(screen_height * 0.35)
+        elif screen_width <= 1920:  # 中等屏幕
+            width = int(screen_width * 0.15)
+            height = int(screen_height * 0.2)
+        else:  # 大屏幕
+            width = int(screen_width * 0.125)
+            height = int(screen_height * 0.25)
+        
+        # 确保窗口尺寸不小于最小值
+        width = max(width, 400)
+        height = max(height, 450)
+        
+        # 确保窗口不会超过屏幕的80%
+        width = min(width, int(screen_width * 0.8))
+        height = min(height, int(screen_height * 0.8))
         
         # 计算居中位置
-        x = (window.winfo_screenwidth() // 2) - (width // 2)
-        y = (window.winfo_screenheight() // 2) - (height // 2)
+        x = (screen_width // 2) - (width // 2)
+        y = (screen_height // 2) - (height // 2)
         
-        # 设置窗口位置
+        # 设置窗口位置和大小
         window.geometry(f'{width}x{height}+{x}+{y}')
         
         # 设置为置顶窗口
