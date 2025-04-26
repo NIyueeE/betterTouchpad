@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
 from .configure_logger import configure_logger
+import platform
 
 # 初始化日志记录器
 logger = configure_logger()
@@ -185,10 +186,19 @@ class SettingsManager:
                     # 设置窗口图标
                     try:
                         current_dir = os.path.dirname(os.path.abspath(__file__))
-                        icon_path = os.path.join(current_dir, 'source', 'default.ico')
+
+                        # linux可能不支持ico图标
+                        if platform.system() == "Windows":
+                            icon_name = 'setting_icon.ico'
+                        elif platform.system() == "Linux":
+                            icon_name = 'setting_icon.png'
+                    
+                        icon_path = os.path.join(current_dir, 'source', icon_name)
                         if os.path.exists(icon_path):
                             settings_window.iconbitmap(icon_path)
                             logger.info(f"已设置窗口图标: {icon_path}")
+                        else:
+                            logger.error(f"窗口图标文件不存在: {icon_path}")
                     except Exception as e:
                         logger.error(f"设置窗口图标失败: {e}")
                     

@@ -8,6 +8,7 @@ from .controllers import create_controller
 from .configure_logger import configure_logger
 from .system_tray import SystemTrayController
 from .setting import SettingsManager
+from .cursor_indicator import CursorIndicator
 
 # 初始化日志记录器
 logger = configure_logger()
@@ -72,6 +73,9 @@ class TouchpadController:
         self.tray_manager = SystemTrayController(self.controller, self.command_queue)
         self.config_manager = SettingsManager(self.command_queue)
         self.settings_window_open = False  # 设置窗口状态
+        
+        # 创建鼠标指示器
+        self.cursor_indicator = CursorIndicator(self.command_queue)
     
     # ============================== 鼠标点击处理 ==============================
     def on_left_click(self, event):
@@ -119,9 +123,20 @@ class TouchpadController:
                 if MODE == 1:  # 切换模式
                     self.touchpad_active = not self.touchpad_active
                     self.controller.toggle(self.touchpad_active)
+                    
+                    # 根据状态显示不同的鼠标指示器
+                    if self.touchpad_active:
+                        # 触控板激活后一直显示
+                        self.cursor_indicator.start("on")
+                    else:
+                        # 触控板关闭时显示off图标，然后自动隐藏
+                        self.cursor_indicator.start("off", 1.1)
                 else:  # 长按模式
                     self.touchpad_active = True
                     self.controller.toggle(True)  # 启用触控板
+                    
+                    # 显示on图标
+                    self.cursor_indicator.start("on")
                 
                 # 更新系统托盘图标
                 self.tray_manager.update_touchpad_status(self.touchpad_active)
@@ -207,6 +222,10 @@ class TouchpadController:
                                 except Exception as e:
                                     logger.error(f"解绑按键失败: {e}或者按键未绑定")
                                 self.touchpad_active = False
+                                
+                                # 显示off图标，然后自动隐藏
+                                self.cursor_indicator.start("off", 1.1)
+                                
                                 # 更新系统托盘图标
                                 self.tray_manager.update_touchpad_status(self.touchpad_active)
                                 logger.info(f"触控板禁用，{LEFT_CLICK},{RIGHT_CLICK}解绑")
@@ -251,6 +270,9 @@ class TouchpadController:
             self.tray_manager.start()
             logger.info("系统托盘图标已启动")
             
+            # 显示首次启动提示图标并自动隐藏
+            self.cursor_indicator.start("default", 0.7)
+            
             # 主循环 - 处理队列中的命令
             while not self.should_exit:
                 time.sleep(0.1)
@@ -281,6 +303,12 @@ class TouchpadController:
         
         # 停止系统托盘图标
         self.tray_manager.stop()
+        
+        # 停止鼠标指示器
+        try:
+            self.cursor_indicator.stop()
+        except Exception as e:
+            logger.error(f"停止鼠标指示器失败: {e}")
 
     def _process_command_queue(self):
         """处理命令队列中的命令，响应用户操作和状态变更"""
@@ -328,6 +356,9 @@ class TouchpadController:
                 if MODE == 0 and self.touchpad_active:
                     self.touchpad_active = False
                     self.controller.toggle(False)
+                    # 显示触控板关闭提示
+                    self.cursor_indicator.stop()
+                    self.cursor_indicator.start_with_auto_hide("off", 2.0)
                     # 更新图标状态
                     self.tray_manager.update_touchpad_status(self.touchpad_active)
                 
@@ -367,6 +398,11 @@ class TouchpadController:
                         if MODE == 0:  # 切换到长按模式
                             self.controller.toggle(False)
                             self.touchpad_active = False
+                            
+                            # 显示触控板关闭提示
+                            self.cursor_indicator.stop()
+                            self.cursor_indicator.start_with_auto_hide("off", 2.0)
+                            
                             self.tray_manager.update_touchpad_status(self.touchpad_active)
                             logger.info("模式切换为长按模式，触控板已禁用")
                     
