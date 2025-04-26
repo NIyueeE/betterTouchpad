@@ -1,8 +1,39 @@
 import threading
 import os
 import pystray
+import platform
 from PIL import Image, ImageDraw
 from .configure_logger import configure_logger
+
+# linux系统下设置pystray使用AppIndicator后端
+if platform.system() == 'Linux':
+    import gi
+    gi.require_version('AppIndicator3', '0.1')
+    os.environ['PYSTRAY_BACKEND'] = 'appindicator'
+    
+    # 修复DBus通知问题
+    try:
+        import pystray._util.notify_dbus
+        
+        # 创建一个空的通知处理类以替代默认的DBus通知功能
+        class DummyNotifier:
+            def __init__(self):
+                pass
+                
+            def notify(self, message, title):
+                pass
+                
+            def hide(self):
+                pass
+
+            def close(self):
+                pass
+                
+        # 替换原有的通知器
+        pystray._util.notify_dbus.Notifier = DummyNotifier
+        
+    except ImportError:
+        pass
 
 # 初始化日志记录器
 logger = configure_logger()
