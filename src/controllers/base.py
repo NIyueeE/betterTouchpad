@@ -16,6 +16,12 @@ class TouchpadController:
         """
         切换触控板状态
         子类必须实现此方法
+        
+        参数:
+            enable (bool): True启用触控板，False禁用触控板
+            
+        返回:
+            bool: 操作是否成功
         """
         raise NotImplementedError
     

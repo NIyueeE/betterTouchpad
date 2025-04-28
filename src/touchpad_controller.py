@@ -18,7 +18,7 @@ def load_config():
     """
     从配置文件加载设置，如果加载失败则使用默认值
     
-    Returns:
+    返回:
         tuple: (响应时间, 热键, 左键点击按键, 右键点击按键, 模式)
     """
     settings_manager = SettingsManager(queue.Queue())
@@ -82,7 +82,7 @@ class TouchpadController:
         """
         处理左键点击事件
         
-        Args:
+        参数:
             event: 键盘事件对象
         """
         if event.name == LEFT_CLICK:
@@ -97,7 +97,7 @@ class TouchpadController:
         """
         处理右键点击事件
         
-        Args:
+        参数:
             event: 键盘事件对象
         """
         if event.name == RIGHT_CLICK:
@@ -156,14 +156,14 @@ class TouchpadController:
         """
         处理键盘事件，根据热键的按下和释放事件控制触控板模式
         
-        Args:
+        参数:
             event: 键盘事件对象
             
-        Returns:
+        返回:
             False: 阻止事件传递到系统
             None: 允许事件传递到系统
         """
-        logger.debug(f"Key event: {event.name} {event.event_type}")
+        logger.debug(f"按键事件: {event.name} {event.event_type}")
         
         try:            
             # 仅处理热键相关事件
@@ -358,7 +358,7 @@ class TouchpadController:
                     self.controller.toggle(False)
                     # 显示触控板关闭提示
                     self.cursor_indicator.stop()
-                    self.cursor_indicator.start_with_auto_hide("off", 2.0)
+                    self.cursor_indicator.start("off", 2.0)
                     # 更新图标状态
                     self.tray_manager.update_touchpad_status(self.touchpad_active)
                 
@@ -401,7 +401,7 @@ class TouchpadController:
                             
                             # 显示触控板关闭提示
                             self.cursor_indicator.stop()
-                            self.cursor_indicator.start_with_auto_hide("off", 2.0)
+                            self.cursor_indicator.start("off", 2.0)
                             
                             self.tray_manager.update_touchpad_status(self.touchpad_active)
                             logger.info("模式切换为长按模式，触控板已禁用")

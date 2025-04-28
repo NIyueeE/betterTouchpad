@@ -5,7 +5,7 @@ import platform
 from PIL import Image, ImageDraw
 from .configure_logger import configure_logger
 
-# linux系统下设置pystray使用AppIndicator后端
+# Linux系统下设置pystray使用AppIndicator后端
 if platform.system() == 'Linux':
     import gi
     gi.require_version('AppIndicator3', '0.1')
@@ -17,16 +17,21 @@ if platform.system() == 'Linux':
         
         # 创建一个空的通知处理类以替代默认的DBus通知功能
         class DummyNotifier:
+            """空通知器类，用于替代Linux下默认的DBus通知器，解决通知相关问题"""
             def __init__(self):
+                """初始化空通知器"""
                 pass
                 
             def notify(self, message, title):
+                """空通知方法，忽略所有通知"""
                 pass
                 
             def hide(self):
+                """隐藏通知方法"""
                 pass
 
             def close(self):
+                """关闭通知方法"""
                 pass
                 
         # 替换原有的通知器
@@ -49,7 +54,7 @@ class SystemTrayController:
         """
         初始化系统托盘管理器
         
-        Args:
+        参数:
             controller: 触控板控制器对象
             command_queue: 用于跨线程通信的命令队列
         """
@@ -77,7 +82,7 @@ class SystemTrayController:
         """
         更新触控板状态并刷新图标显示
         
-        Args:
+        参数:
             is_active (bool): 触控板是否激活
         """
         self.touchpad_active = is_active
@@ -93,7 +98,7 @@ class SystemTrayController:
         """
         创建系统托盘图标及其菜单
         
-        Returns:
+        返回:
             pystray.Icon: 创建的系统托盘图标对象
         """
         # 获取图标目录
@@ -191,7 +196,7 @@ class SystemTrayController:
         """
         创建默认图标（蓝色圆形触控板图标）
         
-        Returns:
+        返回:
             Image: PIL图像对象
         """
         image = Image.new('RGBA', (64, 64), color=(0, 0, 0, 0))

@@ -2,6 +2,7 @@ import ctypes
 import time
 import logging
 import winreg
+import platform
 from .base import TouchpadController
 
 logger = logging.getLogger(__name__)
@@ -35,10 +36,10 @@ class WindowsTouchpadController(TouchpadController):
         切换触控板状态
         
         参数:
-            enable: 布尔值，True启用触控板，False禁用触控板
+            enable (bool): True启用触控板，False禁用触控板
             
         返回:
-            bool - 操作是否成功
+            bool: 操作是否成功
         """
         try:
             # 读取当前注册表值
@@ -88,13 +89,3 @@ class WindowsTouchpadController(TouchpadController):
         本实现无需特殊操作
         """
         pass
-
-def create_controller():
-    if system == "Windows":
-        return WindowsTouchpadController()
-    elif system == "Linux":
-        return LinuxTouchpadController()
-    else:
-        raise NotImplementedError(f"不支持的平台: {system}")
-
-__all__ = ['TouchpadController', 'create_controller']
