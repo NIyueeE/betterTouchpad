@@ -174,99 +174,43 @@ class SettingsManager:
     
     def _create_settings_controls(self, parent_frame, config_data):
         settings_frame = ttk.Frame(parent_frame)
-        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        settings_frame.pack(fill=tk.BOTH, expand=True)
         row_pady = 8
-
-        # 输入验证函数
-        def validate_float(text):
-            if text == "" or text == ".":
-                return True
-            try:
-                float(text)
-                return True
-            except ValueError:
-                return False
-
-        function_keys = [f"f{i}" for i in range(1, 25)]
-
-        # 长按响应时间设置（改用 StringVar）
-        ttk.Label(settings_frame, text="长按响应时间 (秒):", font=("Arial", 10)).grid(
-            row=0, column=0, sticky=tk.E, pady=row_pady, padx=5)
-
-        response_time_var = tk.StringVar()  # 改为 StringVar
-        response_time_value = config_data.get("response_time", "0.5")  # 直接使用字符串
-        response_time_var.set(response_time_value)
-        validate_cmd = (settings_frame.register(validate_float), '%P')
-        response_time_entry = ttk.Entry(
-            settings_frame,
-            textvariable=response_time_var,
-            validate="key",
-            validatecommand=validate_cmd,
-            width=8
-        )
-        response_time_entry.grid(row=0, column=1, sticky=tk.W, pady=row_pady, padx=5)
-
-        # 创建下拉框组件
-        def create_key_selector(row, label, config_key):
-            ttk.Label(settings_frame, text=f"{label}:", font=("Arial", 10)).grid(
-                row=row, column=0, sticky=tk.E, pady=row_pady, padx=5)
-
-            var = tk.StringVar()
-            default_value = config_data.get(config_key, "f1")
-            var.set(default_value)  # 显式设置
-            combo = ttk.Combobox(
-                settings_frame,
-                textvariable=var,
-                values=function_keys,
-                width=6,
-                state="readonly"
-            )
-            if default_value in function_keys:
-                combo.current(function_keys.index(default_value))
-            else:
-                combo.current(0)
-            combo.grid(row=row, column=1, sticky=tk.W, pady=row_pady, padx=5)
-            return var
-
-        hot_key_var = create_key_selector(1, "触发键", "hot_key")
-        left_click_var = create_key_selector(2, "左键点击", "left_click")
-        right_click_var = create_key_selector(3, "右键点击", "right_click")
-
-        # 操作模式设置
+        function_keys = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
+                         "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24"]
+        
+        ttk.Label(settings_frame, text="长按响应时间 (秒):", font=("Arial", 10)).grid(row=0, column=0, sticky=tk.W, pady=row_pady)
+        response_time_var = tk.StringVar(value=str(config_data["response_time"]))
+        response_time_entry = ttk.Entry(settings_frame, textvariable=response_time_var, width=15)
+        response_time_entry.grid(row=0, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        config_data["response_time_entry"] = response_time_entry
+        
+        ttk.Label(settings_frame, text="触发键:", font=("Arial", 10)).grid(row=1, column=0, sticky=tk.W, pady=row_pady)
+        hot_key_combo = ttk.Combobox(settings_frame, values=function_keys, width=12, state="readonly")
+        hot_key_combo.set(config_data["hot_key"])
+        hot_key_combo.grid(row=1, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        config_data["hot_key_combo"] = hot_key_combo
+        
+        ttk.Label(settings_frame, text="左键点击:", font=("Arial", 10)).grid(row=2, column=0, sticky=tk.W, pady=row_pady)
+        left_click_combo = ttk.Combobox(settings_frame, values=function_keys, width=12, state="readonly")
+        left_click_combo.set(config_data["left_click"])
+        left_click_combo.grid(row=2, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        config_data["left_click_combo"] = left_click_combo
+        
+        ttk.Label(settings_frame, text="右键点击:", font=("Arial", 10)).grid(row=3, column=0, sticky=tk.W, pady=row_pady)
+        right_click_combo = ttk.Combobox(settings_frame, values=function_keys, width=12, state="readonly")
+        right_click_combo.set(config_data["right_click"])
+        right_click_combo.grid(row=3, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        config_data["right_click_combo"] = right_click_combo
+        
         mode_frame = ttk.LabelFrame(parent_frame, text="操作模式", padding=(15, 5))
-        mode_frame.pack(fill=tk.X, expand=False, pady=10, padx=10)
-
-        mode_var = tk.IntVar()
-        mode_value = int(config_data.get("mode", 0))
-        mode_var.set(mode_value)  # 显式设置
-        mode_0_radio = ttk.Radiobutton(
-            mode_frame,
-            text="长按模式",
-            variable=mode_var,
-            value=0
-        )
+        mode_frame.pack(fill=tk.X, expand=False, pady=15)
+        mode_var = tk.IntVar(value=config_data["mode"])
+        mode_0_radio = ttk.Radiobutton(mode_frame, text="长按模式", variable=mode_var, value=0)
         mode_0_radio.pack(anchor=tk.W, pady=3)
-
-        mode_1_radio = ttk.Radiobutton(
-            mode_frame,
-            text="切换模式",
-            variable=mode_var,
-            value=1
-        )
+        mode_1_radio = ttk.Radiobutton(mode_frame, text="切换模式", variable=mode_var, value=1)
         mode_1_radio.pack(anchor=tk.W, pady=3)
-
-        # 强制刷新界面
-        settings_frame.update_idletasks()
-        mode_frame.update_idletasks()
-
-        # 保存变量引用
-        config_data.update({
-            "response_time_var": response_time_var,
-            "hot_key_var": hot_key_var,
-            "left_click_var": left_click_var,
-            "right_click_var": right_click_var,
-            "mode_var": mode_var
-        })
+        config_data["mode_var"] = mode_var
     
     def _create_settings_buttons(self, parent_frame, settings_window, parent, config_data):
         button_frame = ttk.Frame(parent_frame)
@@ -328,10 +272,8 @@ class SettingsManager:
         window.update()
         screen_width = window.winfo_screenwidth()
         screen_height = window.winfo_screenheight()
-
         width = 450
         height = 500
-
         x = (screen_width // 2) - (width // 2)
         y = (screen_height // 2) - (height // 2)
         window.geometry(f'{width}x{height}+{x}+{y}')
