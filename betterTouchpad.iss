@@ -1,5 +1,5 @@
 #define MyAppName "Better Touchpad"
-#define MyAppVersion "1.0"
+#define MyAppVersion "0.1"
 #define MyAppPublisher "NIyueeE"
 #define MyAppURL "https://github.com/NIyueeE/betterTouchpad"
 #define MyAppExeName "betterTouchpad.exe"
@@ -16,8 +16,8 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=installer
-OutputBaseFilename=betterTouchpad_setup
-SetupIconFile=src\source\setting_icon.ico
+OutputBaseFilename=betterTouchpad_{#MyAppVersion}_setup_windows_x86_64
+SetupIconFile=src\resources\setting_icon.ico
 Compression=lzma
 SolidCompression=yes
 ; 移除管理员权限要求
@@ -26,7 +26,6 @@ PrivilegesRequiredOverridesAllowed=commandline dialog
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

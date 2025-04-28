@@ -1,7 +1,10 @@
-# 构建输出目录
+# pyinstaller构建输出目录
 /build/
 /dist/
 
 # Python缓存文件
 /src/__pycache__/
 /src/controllers/__pycache__/
+
+# Inno Setup Compiler输出文件
+/installer/
