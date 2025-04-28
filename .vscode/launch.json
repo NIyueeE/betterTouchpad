@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: 主程序",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.main",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "windows": {
+                "console": "integratedTerminal"
+            },
+            "linux": {
+                "console": "integratedTerminal",
+                "sudo": true,
+                "python": "python3",
+                "args": []
+            }
+        }
+    ]
+}

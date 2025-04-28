@@ -1,0 +1,7 @@
+# 构建输出目录
+/build/
+/dist/
+
+# Python缓存文件
+/src/__pycache__/
+/src/controllers/__pycache__/
