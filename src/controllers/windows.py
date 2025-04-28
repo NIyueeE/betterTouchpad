@@ -2,8 +2,7 @@ import ctypes
 import time
 import logging
 import winreg
-import platform
-from .base import TouchpadController
+from controllers.base import BaseTouchpadController
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,7 @@ KEYEVENTF_KEYUP = 0x0002    # 按键释放
 reg_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\PrecisionTouchPad\Status"
 value_name = "Enabled"
 
-class WindowsTouchpadController(TouchpadController):
+class WindowsTouchpadController(BaseTouchpadController):
     """
     Windows 精确触摸板控制器
     通过模拟按下 Ctrl + Win + F24 组合键实现触控板状态切换

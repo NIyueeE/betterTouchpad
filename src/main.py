@@ -1,4 +1,4 @@
-from .touchpad_controller import TouchpadController
+from touchpad_controller import TouchpadController
 
 if __name__ == "__main__":
     """

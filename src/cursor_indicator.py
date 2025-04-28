@@ -4,7 +4,9 @@ from PIL import Image, ImageTk
 import pyautogui
 import platform
 import os
-from .configure_logger import configure_logger
+import time
+from configure_logger import configure_logger
+from path_resolver import get_resource_path, get_application_path
 
 # 初始化日志记录器
 logger = configure_logger()
@@ -181,11 +183,7 @@ class CursorIndicator:
     def _load_icon(self, icon_type):
         """加载指定类型的图标"""
         try:
-            # 获取图标目录
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            icon_dir = os.path.join(current_dir, 'source')
-            
-            # 根据类型选择图标文件
+            # 使用path_resolver获取图标路径
             icon_files = {
                 "default": "cursor_default.png",
                 "on": "cursor_on.png",
@@ -193,12 +191,18 @@ class CursorIndicator:
             }
             
             icon_file = icon_files.get(icon_type, "cursor_default.png")
-            icon_path = os.path.join(icon_dir, icon_file)
+            icon_path = get_resource_path(icon_file)
             
             # 检查图标是否存在，如不存在则创建默认图标
-            if not os.path.exists(icon_path):
-                logger.warning(f"未找到图标文件: {icon_path}，创建默认图标")
-                self._create_default_icon(icon_path, icon_type)
+            if icon_path is None or not os.path.exists(icon_path):
+                logger.warning(f"未找到图标文件: {icon_file}，创建默认图标")
+                # 获取应用程序路径，用于保存默认图标
+                app_path = get_application_path()
+                resources_dir = os.path.join(app_path, 'resources')
+                os.makedirs(resources_dir, exist_ok=True)
+                save_path = os.path.join(resources_dir, icon_file)
+                self._create_default_icon(save_path, icon_type)
+                icon_path = save_path
             
             # 加载图标
             img = Image.open(icon_path)

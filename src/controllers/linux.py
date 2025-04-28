@@ -1,7 +1,7 @@
 import subprocess
 import logging
 import re
-from .base import TouchpadController
+from controllers.base import BaseTouchpadController
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 TOUCHPAD_IDENTIFIERS = ["Touchpad", "TouchPad"]
 DEVICE_PREFIX = "Device:"
 
-class LinuxTouchpadController(TouchpadController):
+class LinuxTouchpadController(BaseTouchpadController):
     """
     Linux系统触控板控制器
     使用libinput工具检测和xinput管理触控板设备

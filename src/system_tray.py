@@ -2,8 +2,10 @@ import threading
 import os
 import pystray
 import platform
+import time
 from PIL import Image, ImageDraw
-from .configure_logger import configure_logger
+from configure_logger import configure_logger
+from path_resolver import get_resource_path, get_application_path
 
 # Linux系统下设置pystray使用AppIndicator后端
 if platform.system() == 'Linux':
@@ -101,24 +103,12 @@ class SystemTrayController:
         返回:
             pystray.Icon: 创建的系统托盘图标对象
         """
-        # 获取图标目录
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        icon_dir = os.path.join(current_dir, 'source')
-        icon_path = os.path.join(icon_dir, 'default.png')
-        
-        # 确保图标目录存在
-        if not os.path.exists(icon_dir):
-            try:
-                os.makedirs(icon_dir, exist_ok=True)
-                logger.info(f"创建图标目录: {icon_dir}")
-            except Exception as e:
-                logger.error(f"创建图标目录失败: {e}")
-                # 回退到当前目录
-                icon_path = os.path.join(current_dir, 'default.png')
+        # 使用path_resolver获取图标路径
+        icon_path = get_resource_path('default.png')
         
         # 获取图标图像
         icon_image = None
-        if os.path.exists(icon_path):
+        if icon_path and os.path.exists(icon_path):
             try:
                 icon_image = Image.open(icon_path)
             except Exception as e:
@@ -129,8 +119,13 @@ class SystemTrayController:
         if not icon_image:
             icon_image = self._create_default_icon()
             try:
-                icon_image.save(icon_path)
-                logger.info(f"创建默认图标: {icon_path}")
+                # 获取应用程序路径，用于保存默认图标
+                app_path = get_application_path()
+                resources_dir = os.path.join(app_path, 'resources')
+                os.makedirs(resources_dir, exist_ok=True)
+                save_path = os.path.join(resources_dir, 'default.png')
+                icon_image.save(save_path)
+                logger.info(f"创建默认图标: {save_path}")
             except Exception as e:
                 logger.error(f"保存默认图标失败: {e}")
         
@@ -175,13 +170,12 @@ class SystemTrayController:
             
         try:
             # 根据触控板状态选择图标
-            current_dir = os.path.dirname(os.path.abspath(__file__))
             icon_name = 'on.png' if self.touchpad_active else 'off.png'
-            icon_path = os.path.join(current_dir, 'source', icon_name)
+            icon_path = get_resource_path(icon_name)
             
             # 检查图标是否存在
-            if not os.path.exists(icon_path):
-                logger.warning(f"状态图标文件不存在: {icon_path}")
+            if not icon_path or not os.path.exists(icon_path):
+                logger.warning(f"状态图标文件不存在: {icon_name}")
                 return
                 
             # 加载图标并更新

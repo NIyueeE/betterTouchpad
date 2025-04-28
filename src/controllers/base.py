@@ -3,7 +3,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class TouchpadController:
+class BaseTouchpadController:
     """
     触控板控制器基类
     定义所有触控板控制器必须实现的接口

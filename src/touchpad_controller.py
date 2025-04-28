@@ -4,11 +4,11 @@ import queue
 import keyboard
 import pyautogui
 from pynput import mouse
-from .controllers import create_controller
-from .configure_logger import configure_logger
-from .system_tray import SystemTrayController
-from .setting import SettingsManager
-from .cursor_indicator import CursorIndicator
+from controllers import create_controller
+from configure_logger import configure_logger
+from system_tray import SystemTrayController
+from setting import SettingsManager
+from cursor_indicator import CursorIndicator
 
 # 初始化日志记录器
 logger = configure_logger()

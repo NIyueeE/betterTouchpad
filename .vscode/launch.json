@@ -1,11 +1,11 @@
 {
-    "version": "0.2.0",
+    "version": "0.3.0",
     "configurations": [
         {
-            "name": "Python: 主程序",
+            "name": "开发调试",
             "type": "debugpy",
             "request": "launch",
-            "module": "src.main",
+            "program": "${workspaceFolder}/src/main.py",
             "justMyCode": false,
             "cwd": "${workspaceFolder}",
             "env": {
@@ -16,9 +16,8 @@
             },
             "linux": {
                 "console": "integratedTerminal",
-                "sudo": true,
-                "python": "python3",
-                "args": []
+                "runtimeExecutable": "sudo",
+                "runtimeArgs": ["${command:python.interpreterPath}"]
             }
         }
     ]

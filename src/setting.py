@@ -3,8 +3,9 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
-from .configure_logger import configure_logger
+from configure_logger import configure_logger
 import platform
+from path_resolver import get_config_path, get_resource_path
 
 # 初始化日志记录器
 logger = configure_logger()
@@ -35,8 +36,12 @@ class SettingsManager:
         Returns:
             str: 配置文件的完整路径
         """
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        return os.path.join(current_dir, 'configure.json')
+        config_path = get_config_path()
+        if config_path is None:
+            # 如果没有找到配置文件，则返回源代码目录下的默认路径（用于创建新文件）
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(current_dir, 'configure.json')
+        return config_path
     
     def _load_global_config(self):
         """从配置文件加载全局配置，若文件不存在则使用默认值"""
@@ -185,13 +190,11 @@ class SettingsManager:
                     
                     # 设置窗口图标
                     try:
-                        current_dir = os.path.dirname(os.path.abspath(__file__))
-
-                        # 根据不同系统使用不同的图标设置方法
+                        # 使用path_resolver获取图标路径
                         if platform.system() == "Windows":
                             icon_name = 'setting_icon.ico'
-                            icon_path = os.path.join(current_dir, 'source', icon_name)
-                            if os.path.exists(icon_path):
+                            icon_path = get_resource_path(icon_name)
+                            if icon_path and os.path.exists(icon_path):
                                 settings_window.iconbitmap(icon_path)
                                 logger.info(f"已设置窗口图标: {icon_path}")
                             else:
@@ -200,8 +203,8 @@ class SettingsManager:
                         #elif platform.system() == "Linux":
                         #    icon_name = 'setting_icon.png'
                         #    # 好像不支持png格式, 到时候再修复吧, 不修复了。linux取消设置窗口!!!
-                        #    icon_path = os.path.join(current_dir, 'source', icon_name)
-                        #    if os.path.exists(icon_path):
+                        #    icon_path = get_resource_path(icon_name)
+                        #    if icon_path and os.path.exists(icon_path):
                         #        icon_img = tk.PhotoImage(file=icon_path)
                         #        settings_window.iconphoto(True, icon_img)
                         #        # 保持引用以防止图像被垃圾回收
@@ -469,29 +472,33 @@ class SettingsManager:
         window.update()
         window.update_idletasks()
         
-        # 获取屏幕尺寸
+        # 获取屏幕尺寸和有效像素（考虑系统缩放）
         screen_width = window.winfo_screenwidth()
         screen_height = window.winfo_screenheight()
-        
-        # 根据屏幕分辨率计算窗口尺寸
-        # 在较小屏幕上使用较小的比例，较大屏幕上使用较大的比例
-        if screen_width <= 1366:  # 小屏幕
-            width = int(screen_width * 0.175)
-            height = int(screen_height * 0.35)
-        elif screen_width <= 1920:  # 中等屏幕
-            width = int(screen_width * 0.15)
-            height = int(screen_height * 0.2)
-        else:  # 大屏幕
-            width = int(screen_width * 0.125)
-            height = int(screen_height * 0.25)
-        
-        # 确保窗口尺寸不小于最小值
-        width = max(width, 400)
-        height = max(height, 450)
-        
-        # 确保窗口不会超过屏幕的80%
-        width = min(width, int(screen_width * 0.8))
-        height = min(height, int(screen_height * 0.8))
+        screen_ratio = screen_width / screen_height
+    
+        hw_ratio = 1.2
+        base_width = screen_width * 0.13  # 初始基准宽度
+    
+        # 动态调整参数
+        width = min(
+            max(int(base_width * (screen_ratio ** 0.5)), 200),  # 宽高比修正
+            int(screen_width * 0.3)  # 最大宽度限制
+        )
+    
+        # 高度计算（考虑内容和功能需求）
+        height = int(width * hw_ratio) 
+        height = min(
+            max(height, int(screen_height * 0.25)),  # 最小显示高度
+            int(screen_height * 0.6)  # 最大显示高度
+        )
+    
+        # 宽高比补偿（防止极端屏幕比例）
+        if screen_ratio > 2:  # 超宽屏补偿
+            width = int(width * 0.8)
+        elif screen_ratio < 1:  # 竖屏模式
+            height = int(height * 1.2)
+
         
         # 计算居中位置
         x = (screen_width // 2) - (width // 2)
