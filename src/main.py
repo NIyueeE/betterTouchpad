@@ -7,3 +7,4 @@ if __name__ == "__main__":
     """
     controller = TouchpadController()
     controller.run()
+    print("程序已退出")

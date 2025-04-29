@@ -289,26 +289,41 @@ class TouchpadController:
     
     def _cleanup_resources(self):
         """清理所有资源，包括控制器、键盘钩子和系统托盘"""
-        # 清理控制器
-        try:
-            self.controller.cleanup()
-        except Exception as e:
-            logger.error(f"清理控制器失败: {e}")
-            
-        # 清理键盘钩子
+        self._cleanup_controller()
+        self._cleanup_keyboard_hook()
+        self._cleanup_tray_manager()
+        self._cleanup_cursor_indicator()
+    
+    def _cleanup_controller(self):
+        """清理控制器资源"""
+        if hasattr(self, 'controller') and self.controller is not None:
+            try:
+                self.controller.cleanup()
+            except Exception as e:
+                logger.exception(f"清理控制器失败: {e}", exc_info=True)
+    
+    def _cleanup_keyboard_hook(self):
+        """卸载所有键盘钩子"""
         try:
             keyboard.unhook_all()
         except Exception as e:
-            logger.error(f"卸载钩子失败: {e}")
-        
-        # 停止系统托盘图标
-        self.tray_manager.stop()
-        
-        # 停止鼠标指示器
-        try:
-            self.cursor_indicator.stop()
-        except Exception as e:
-            logger.error(f"停止鼠标指示器失败: {e}")
+            logger.exception(f"卸载钩子失败: {e}", exc_info=True)
+    
+    def _cleanup_tray_manager(self):
+        """停止系统托盘图标"""
+        if hasattr(self, 'tray_manager') and self.tray_manager is not None:
+            try:
+                self.tray_manager.stop()
+            except Exception as e:
+                logger.exception(f"停止系统托盘失败: {e}", exc_info=True)
+    
+    def _cleanup_cursor_indicator(self):
+        """停止鼠标指示器"""
+        if hasattr(self, 'cursor_indicator') and self.cursor_indicator is not None:
+            try:
+                self.cursor_indicator.destroy()
+            except Exception as e:
+                logger.exception(f"停止鼠标指示器失败: {e}", exc_info=True)
 
     def _process_command_queue(self):
         """处理命令队列中的命令，响应用户操作和状态变更"""

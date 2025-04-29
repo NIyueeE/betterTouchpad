@@ -175,42 +175,66 @@ class SettingsManager:
     def _create_settings_controls(self, parent_frame, config_data):
         settings_frame = ttk.Frame(parent_frame)
         settings_frame.pack(fill=tk.BOTH, expand=True)
-        row_pady = 8
-        function_keys = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
-                         "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24"]
+        row_pady = 12  # 增加行间距
         
-        ttk.Label(settings_frame, text="长按响应时间 (秒):", font=("Arial", 10)).grid(row=0, column=0, sticky=tk.W, pady=row_pady)
+        function_keys = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", 
+                        "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20"]
+        
+        # 响应时间设置
+        ttk.Label(settings_frame, text="长按响应时间 (秒):").grid(
+            row=1, column=0, sticky=tk.W, pady=row_pady)
         response_time_var = tk.StringVar(value=str(config_data["response_time"]))
         response_time_entry = ttk.Entry(settings_frame, textvariable=response_time_var, width=15)
-        response_time_entry.grid(row=0, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        response_time_entry.insert(0, str(config_data["response_time"]))  # 提前插入值
+        response_time_entry.grid(row=1, column=1, sticky=tk.W, pady=row_pady, padx=10)
         config_data["response_time_entry"] = response_time_entry
         
-        ttk.Label(settings_frame, text="触发键:", font=("Arial", 10)).grid(row=1, column=0, sticky=tk.W, pady=row_pady)
+        # 触发键设置
+        ttk.Label(settings_frame, text="触发键:").grid(
+            row=2, column=0, sticky=tk.W, pady=row_pady)
         hot_key_combo = ttk.Combobox(settings_frame, values=function_keys, width=12, state="readonly")
         hot_key_combo.set(config_data["hot_key"])
-        hot_key_combo.grid(row=1, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        hot_key_combo.grid(row=2, column=1, sticky=tk.W, pady=row_pady, padx=10)
         config_data["hot_key_combo"] = hot_key_combo
         
-        ttk.Label(settings_frame, text="左键点击:", font=("Arial", 10)).grid(row=2, column=0, sticky=tk.W, pady=row_pady)
+        # 左键点击设置
+        ttk.Label(settings_frame, text="左键点击:").grid(
+            row=3, column=0, sticky=tk.W, pady=row_pady)
         left_click_combo = ttk.Combobox(settings_frame, values=function_keys, width=12, state="readonly")
         left_click_combo.set(config_data["left_click"])
-        left_click_combo.grid(row=2, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        left_click_combo.grid(row=3, column=1, sticky=tk.W, pady=row_pady, padx=10)
         config_data["left_click_combo"] = left_click_combo
         
-        ttk.Label(settings_frame, text="右键点击:", font=("Arial", 10)).grid(row=3, column=0, sticky=tk.W, pady=row_pady)
+        # 右键点击设置
+        ttk.Label(settings_frame, text="右键点击:").grid(
+            row=4, column=0, sticky=tk.W, pady=row_pady)
         right_click_combo = ttk.Combobox(settings_frame, values=function_keys, width=12, state="readonly")
         right_click_combo.set(config_data["right_click"])
-        right_click_combo.grid(row=3, column=1, sticky=tk.W, pady=row_pady, padx=10)
+        right_click_combo.grid(row=4, column=1, sticky=tk.W, pady=row_pady, padx=10)
         config_data["right_click_combo"] = right_click_combo
         
-        mode_frame = ttk.LabelFrame(parent_frame, text="操作模式", padding=(15, 5))
-        mode_frame.pack(fill=tk.X, expand=False, pady=15)
-        mode_var = tk.IntVar(value=config_data["mode"])
-        mode_0_radio = ttk.Radiobutton(mode_frame, text="长按模式", variable=mode_var, value=0)
-        mode_0_radio.pack(anchor=tk.W, pady=3)
-        mode_1_radio = ttk.Radiobutton(mode_frame, text="切换模式", variable=mode_var, value=1)
-        mode_1_radio.pack(anchor=tk.W, pady=3)
-        config_data["mode_var"] = mode_var
+        # 模式切换组
+        mode_frame = ttk.LabelFrame(settings_frame, text="操作模式", padding=10)
+        mode_frame.grid(row=5, column=0, columnspan=3, sticky="ew", pady=5)
+        
+        # 新增: 左侧标签 + 滑动条 + 右侧标签水平排列
+        left_label = ttk.Label(mode_frame, text="切换模式")
+        left_label.grid(row=0, column=0, padx=15)
+        
+        mode_scale = tk.Scale(mode_frame, from_=0, to=1, orient='horizontal', length=50, 
+                              showvalue=0, borderwidth=1, highlightthickness=1)
+        mode_scale.set(config_data.get("mode", 0))
+        mode_scale.grid(row=0, column=1, padx=15)
+        config_data["mode_scale"] = mode_scale
+
+        right_label = ttk.Label(mode_frame, text="长按模式")
+        right_label.grid(row=0, column=2, padx=15)
+        
+        
+
+        # 刷新并聚焦
+        parent_frame.update_idletasks()
+        parent_frame.focus_force()
     
     def _create_settings_buttons(self, parent_frame, settings_window, parent, config_data):
         button_frame = ttk.Frame(parent_frame)
@@ -223,9 +247,11 @@ class SettingsManager:
                     messagebox.showerror("错误", "响应时间必须是大于0且不超过10的数值")
                     return
                 
+                logger.info(config_data["mode_scale"].get())
                 hot_key = config_data["hot_key_combo"].get()
                 left_click = config_data["left_click_combo"].get()
                 right_click = config_data["right_click_combo"].get()
+                mode = config_data["mode_scale"].get()
                 
                 if (left_click == right_click or
                     left_click == hot_key or
@@ -238,7 +264,7 @@ class SettingsManager:
                     "hot_key": hot_key,
                     "left_click": left_click,
                     "right_click": right_click,
-                    "mode": config_data["mode_var"].get()
+                    "mode": mode
                 }
                 
                 if not self._save_config(new_config):
