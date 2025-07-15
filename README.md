@@ -1,5 +1,10 @@
-# betterTouchpad
+# ~~betterTouchpad~~
+已停止开发, 目前仅能在Windows系统下使用, 且仅支持功能键绑定。
+考虑使用[rust重构](https://github.com/NIyueeE/Enable-Touchpad)
 
+<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br
+
+============================================================================================================================================================================================================================
 基于热键的触控板控制工具，主要支持Windows系统。
 
 ## 功能特性
